@@ -1,7 +1,8 @@
 import crypto from 'crypto'
 
 const ALGORITHM = 'aes-256-gcm'
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY!, 'hex') // Must be 32 bytes (64 hex chars)
+const KEY_STRING = process.env.ENCRYPTION_KEY || '0'.repeat(64)
+const KEY = Buffer.from(KEY_STRING, 'hex') // Must be 32 bytes (64 hex chars)
 
 /**
  * Encrypts a plaintext string using AES-256-GCM
