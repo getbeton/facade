@@ -59,3 +59,4 @@ CREATE INDEX idx_collections_user_id ON public.collections(user_id);
 CREATE INDEX idx_collections_site_id ON public.collections(site_id);
 
 
+
