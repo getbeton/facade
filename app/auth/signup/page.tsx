@@ -86,7 +86,7 @@ export default function SignupPage() {
                 <CardContent>
                     <form onSubmit={handleSignup} className="space-y-4">
                         {error && (
-                            <Alert variant="destructive">
+                            <Alert variant="error">
                                 <AlertDescription>{error}</AlertDescription>
                             </Alert>
                         )}

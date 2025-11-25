@@ -89,7 +89,7 @@ export default function PaymentSuccessPage() {
                         <CardDescription>There was an issue confirming your payment</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <Alert variant="destructive">
+                        <Alert variant="error">
                             <AlertDescription>{error}</AlertDescription>
                         </Alert>
                         <Button onClick={() => router.push('/app/app')} className="w-full">

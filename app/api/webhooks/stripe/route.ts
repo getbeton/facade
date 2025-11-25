@@ -1,4 +1,5 @@
 import { stripe } from '@/lib/stripe'
+import Stripe from "stripe"
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { headers } from 'next/headers'
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'No signature' }, { status: 400 })
     }
 
-    let event: Stripe.Event
+    let event: Stripe.Event;
 
     try {
         event = stripe.webhooks.constructEvent(

@@ -1,6 +1,9 @@
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { Button } from '@/components/ui/button'
+import { Header } from '@/components/header'
+import { DashboardEmptyState } from '@/components/dashboard-empty-state'
+import { DashboardSkeleton } from '@/components/dashboard-skeleton'
 
 export default async function DashboardPage() {
     const supabase = await createClient()
@@ -14,24 +17,51 @@ export default async function DashboardPage() {
     }
 
     return (
-        <div className="container mx-auto py-10">
-            <div className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-bold">Dashboard</h1>
-                <form action="/auth/signout" method="post">
-                    <Button variant="outline" type="submit">
-                        Sign Out
-                    </Button>
-                </form>
-            </div>
-
-            <div className="grid gap-4">
-                <div className="p-6 border rounded-lg shadow-sm">
-                    <h2 className="text-xl font-semibold mb-2">Welcome back!</h2>
-                    <p className="text-muted-foreground">
-                        You are logged in as {user.email}
-                    </p>
+        <div className="min-h-screen bg-background">
+            <Header user={user} />
+            <main className="container mx-auto py-10 px-4">
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold">Dashboard</h1>
+                    <p className="text-muted-foreground">Manage your Webflow collections and image generations.</p>
                 </div>
-            </div>
+
+                <Suspense fallback={<DashboardSkeleton />}>
+                    <DashboardContent />
+                </Suspense>
+            </main>
         </div>
     )
 }
+
+async function DashboardContent() {
+    const supabase = await createClient()
+
+    // improved: fetch collections from DB
+    // Assuming a 'collections' table exists. If not, this will fail gracefully or return empty.
+    // We wrap in try/catch just in case the table doesn't exist yet.
+    let collections = []
+    try {
+        const { data, error } = await supabase.from('collections').select('*')
+        if (!error && data) {
+            collections = data
+        }
+    } catch (e) {
+        console.error("Failed to fetch collections", e)
+    }
+
+    if (collections.length === 0) {
+        return <DashboardEmptyState />
+    }
+
+    return (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {collections.map((collection: any) => (
+                <div key={collection.id} className="p-6 border rounded-lg shadow-sm">
+                    <h3 className="font-semibold">{collection.name || 'Untitled Collection'}</h3>
+                    <p className="text-sm text-muted-foreground">ID: {collection.id}</p>
+                </div>
+            ))}
+        </div>
+    )
+}
+

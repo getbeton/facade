@@ -14,7 +14,7 @@ export default function AuthCodeErrorPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <Alert variant="destructive">
+                    <Alert variant="error">
                         <AlertTitle>Error</AlertTitle>
                         <AlertDescription>
                             The authentication code was invalid or has expired. This can happen if:
