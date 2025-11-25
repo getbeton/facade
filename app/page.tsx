@@ -350,11 +350,14 @@ export default function Home() {
     const selectedCollectionData = collections.find(c => c.id === selectedCollection);
 
     return (
-        <main className="min-h-screen p-8 bg-gradient-to-br from-background to-secondary">
-            <div className="max-w-7xl mx-auto space-y-6">
-                <div className="text-center space-y-2">
-                    <h1 className="text-4xl font-bold">Webflow CMS Manager</h1>
-                    <p className="text-muted-foreground">
+        <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-7xl space-y-8">
+                {/* Header */}
+                <div className="text-center space-y-3">
+                    <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+                        Webflow CMS Manager
+                    </h1>
+                    <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
                         Manage your CMS items and generate AI-powered OG images
                     </p>
                 </div>
@@ -432,13 +435,13 @@ export default function Home() {
                             </CardDescription>
                         </CardHeader>
                         <CardPanel>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 {sites.map((site) => (
                                     <Card
                                         key={site.id}
-                                        className={`cursor-pointer transition-all ${selectedSite === site.id
-                                            ? 'ring-2 ring-primary'
-                                            : 'hover:border-primary/50'
+                                        className={`cursor-pointer transition-all duration-200 ${selectedSite === site.id
+                                            ? 'ring-2 ring-primary ring-offset-2'
+                                            : 'hover:shadow-md hover:border-primary/30'
                                             }`}
                                         onClick={() => handleSiteSelect(site.id)}
                                     >
@@ -499,16 +502,16 @@ export default function Home() {
                         {/* Toolbar */}
                         <Card>
                             <CardPanel className="p-4">
-                                <div className="flex flex-wrap gap-4 items-center justify-between">
-                                    <div className="flex gap-2 items-center">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="flex flex-1 items-center gap-3">
                                         <Input
                                             placeholder="Search items..."
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="w-64"
+                                            className="max-w-sm"
                                         />
                                         {selectedItems.size > 0 && (
-                                            <span className="text-sm text-muted-foreground">
+                                            <span className="text-sm text-muted-foreground whitespace-nowrap">
                                                 {selectedItems.size} selected
                                             </span>
                                         )}
