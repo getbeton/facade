@@ -45,8 +45,8 @@ export default function SignupPage() {
             if (error) throw error
 
             // If email confirmations are enabled, show message
-            // Otherwise, redirect to app
-            router.push('/app/dashboard')
+            // Otherwise, redirect to dashboard
+            router.push('/dashboard')
             router.refresh()
         } catch (err: any) {
             setError(err.message || 'Failed to sign up')

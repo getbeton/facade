@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const sessionId = searchParams.get('session_id')
@@ -92,8 +92,8 @@ export default function PaymentSuccessPage() {
                         <Alert variant="error">
                             <AlertDescription>{error}</AlertDescription>
                         </Alert>
-                        <Button onClick={() => router.push('/app/app')} className="w-full">
-                            Return to App
+                        <Button onClick={() => router.push('/dashboard')} className="w-full">
+                            Return to Dashboard
                         </Button>
                     </CardContent>
                 </Card>
@@ -116,15 +116,8 @@ export default function PaymentSuccessPage() {
                     </Alert>
 
                     <div className="space-y-2">
-                        <Button onClick={() => router.push('/app/app')} className="w-full">
-                            Start Image Generation
-                        </Button>
-                        <Button
-                            onClick={() => router.push('/app/history')}
-                            variant="outline"
-                            className="w-full"
-                        >
-                            View Payment History
+                        <Button onClick={() => router.push('/dashboard')} className="w-full">
+                            Go to Dashboard
                         </Button>
                     </div>
 
@@ -136,5 +129,27 @@ export default function PaymentSuccessPage() {
                 </CardContent>
             </Card>
         </div>
+    )
+}
+
+export default function PaymentSuccessPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
+                <Card className="w-full max-w-md">
+                    <CardHeader>
+                        <CardTitle>Loading...</CardTitle>
+                        <CardDescription>Please wait</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center justify-center py-8">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        }>
+            <PaymentSuccessContent />
+        </Suspense>
     )
 }

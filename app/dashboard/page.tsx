@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { Header } from '@/components/header'
 import { DashboardEmptyState } from '@/components/dashboard-empty-state'
 import { DashboardSkeleton } from '@/components/dashboard-skeleton'
+import { DashboardContentWrapper } from '@/components/dashboard-content-wrapper'
 
 export default async function DashboardPage() {
     const supabase = await createClient()
@@ -35,33 +36,27 @@ export default async function DashboardPage() {
 
 async function DashboardContent() {
     const supabase = await createClient()
-
-    // improved: fetch collections from DB
-    // Assuming a 'collections' table exists. If not, this will fail gracefully or return empty.
-    // We wrap in try/catch just in case the table doesn't exist yet.
-    let collections = []
-    try {
-        const { data, error } = await supabase.from('collections').select('*')
-        if (!error && data) {
-            collections = data
-        }
-    } catch (e) {
-        console.error("Failed to fetch collections", e)
-    }
-
-    if (collections.length === 0) {
+    
+    // Get the current user
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
         return <DashboardEmptyState />
     }
 
-    return (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {collections.map((collection: any) => (
-                <div key={collection.id} className="p-6 border rounded-lg shadow-sm">
-                    <h3 className="font-semibold">{collection.name || 'Untitled Collection'}</h3>
-                    <p className="text-sm text-muted-foreground">ID: {collection.id}</p>
-                </div>
-            ))}
-        </div>
-    )
+    // Check if user has API keys saved
+    const { data: keysData, error: keysError } = await supabase
+        .from('user_api_keys')
+        .select('keys_validated, last_validated_at')
+        .eq('user_id', user.id)
+        .single()
+
+    // If no API keys found, show empty state
+    if (keysError || !keysData) {
+        return <DashboardEmptyState />
+    }
+
+    // User has API keys saved - show collection management UI
+    return <DashboardContentWrapper keysValidated={keysData.keys_validated} />
 }
 
