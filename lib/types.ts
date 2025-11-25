@@ -4,6 +4,7 @@ export interface WebflowSite {
     shortName: string;
     previewUrl?: string;
     customDomains?: Array<{ url: string }>;
+    faviconUrl?: string;
 }
 
 export interface WebflowCollection {
@@ -64,4 +65,29 @@ export interface EditedCell {
     fieldName: string;
     originalValue: any;
     newValue: any;
+}
+
+// Database Entities
+export interface Site {
+    id: string; // Webflow Site ID
+    user_id: string;
+    name: string;
+    short_name: string;
+    preview_url: string | null;
+    favicon_url: string | null;
+    last_synced_at: string;
+    created_at: string;
+}
+
+export interface Collection {
+    id: string; // UUID from our DB
+    user_id: string;
+    site_id: string;
+    webflow_collection_id: string;
+    display_name: string;
+    created_at: string;
+    updated_at: string;
+    // Join fields (optional)
+    site?: Site;
+    item_count?: number; // Fetched dynamically
 }

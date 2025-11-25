@@ -6,6 +6,8 @@ import {
 } from '@/lib/webflow';
 import { generateImage } from '@/lib/openai';
 import { createUkiyoePrompt } from '@/lib/prompt-generator';
+import { createClient } from '@/lib/supabase/server';
+import { decrypt } from '@/lib/crypto';
 
 export async function POST(request: NextRequest) {
     const encoder = new TextEncoder();
@@ -13,14 +15,40 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
         async start(controller) {
             try {
-                const { webflowApiKey, openaiApiKey, collectionId, siteId, itemIds } = await request.json();
+                const body = await request.json();
+                let { webflowApiKey, openaiApiKey, collectionId, siteId, itemIds } = body;
+
+                // Resolve keys if collectionId is our DB UUID (simplified check for hyphen)
+                if (collectionId && collectionId.includes('-') && (!webflowApiKey || !openaiApiKey)) {
+                     const supabase = await createClient();
+                     // We might need auth check here, but this is a stream, so it's tricky. 
+                     // Assuming the route is protected or we check auth quickly.
+                     const { data: { user } } = await supabase.auth.getUser();
+                     if (user) {
+                         const { data: collection } = await supabase
+                             .from('collections')
+                             .select('webflow_api_key, openai_api_key, webflow_collection_id, site_id')
+                             .eq('id', collectionId)
+                             .eq('user_id', user.id)
+                             .single();
+                        
+                        if (collection) {
+                            webflowApiKey = decrypt(collection.webflow_api_key);
+                            openaiApiKey = decrypt(collection.openai_api_key);
+                            // Update collectionId to the actual Webflow Collection ID for downstream calls
+                            collectionId = collection.webflow_collection_id;
+                            // Also get siteId if not provided (though usually needed for assets)
+                            if (!siteId) siteId = collection.site_id;
+                        }
+                     }
+                }
 
                 if (!webflowApiKey || !openaiApiKey || !collectionId || !siteId) {
                     controller.enqueue(
                         encoder.encode(
                             JSON.stringify({
                                 status: 'error',
-                                message: 'Missing required parameters',
+                                message: 'Missing required parameters or invalid collection',
                             }) + '\n'
                         )
                     );

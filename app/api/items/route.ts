@@ -4,12 +4,12 @@ import { createClient } from '@/lib/supabase/server';
 import { decrypt } from '@/lib/crypto';
 
 /**
- * GET - Fetch items for a Webflow collection using user's saved API key
+ * GET - Fetch items for a saved collection
  */
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
-        const collectionId = searchParams.get('collectionId');
+        const collectionId = searchParams.get('collectionId'); // This is now our DB UUID
 
         if (!collectionId) {
             return NextResponse.json(
@@ -27,25 +27,27 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Get the user's encrypted Webflow API key
-        const { data: keysData, error: keysError } = await supabase
-            .from('user_api_keys')
-            .select('webflow_api_key')
+        // Get the collection details including API key
+        const { data: collection, error: collectionError } = await supabase
+            .from('collections')
+            .select('webflow_api_key, webflow_collection_id')
+            .eq('id', collectionId)
             .eq('user_id', user.id)
             .single();
 
-        if (keysError || !keysData) {
+        if (collectionError || !collection) {
             return NextResponse.json(
-                { error: 'No API keys found. Please save your keys first.' },
+                { error: 'Collection not found' },
                 { status: 404 }
             );
         }
 
         // Decrypt the API key
-        const webflowApiKey = decrypt(keysData.webflow_api_key);
+        const webflowApiKey = decrypt(collection.webflow_api_key);
+        const webflowCollectionId = collection.webflow_collection_id;
 
-        // Fetch items using the decrypted API key
-        const items = await getCollectionItems(webflowApiKey, collectionId);
+        // Fetch items using the decrypted API key and actual Webflow Collection ID
+        const items = await getCollectionItems(webflowApiKey, webflowCollectionId);
 
         return NextResponse.json({ items });
     } catch (error) {
@@ -59,7 +61,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST - Legacy endpoint that accepts API key in body
- * Kept for backward compatibility
+ * Kept for backward compatibility or direct usage
  */
 export async function POST(request: NextRequest) {
     try {

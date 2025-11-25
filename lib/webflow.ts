@@ -30,6 +30,23 @@ export async function validateWebflowToken(token: string): Promise<boolean> {
 }
 
 /**
+ * Helper to get favicon URL
+ */
+function getFaviconUrl(site: any): string {
+    // If a custom domain is connected, use it
+    if (site.customDomains && site.customDomains.length > 0) {
+        return `https://www.google.com/s2/favicons?domain=${site.customDomains[0].url}&sz=64`;
+    }
+    
+    // Fallback to webflow.io subdomain
+    // Ensure shortName doesn't already have .webflow.io
+    const shortName = site.shortName || '';
+    const domain = shortName.includes('.') ? shortName : `${shortName}.webflow.io`;
+    
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+}
+
+/**
  * Get all sites accessible with the token
  */
 export async function getAllSites(token: string): Promise<WebflowSite[]> {
@@ -42,7 +59,13 @@ export async function getAllSites(token: string): Promise<WebflowSite[]> {
         }
     );
 
-    return response.data.sites || [];
+    const sites = response.data.sites || [];
+    
+    // Add favicon URLs
+    return sites.map((site: any) => ({
+        ...site,
+        faviconUrl: getFaviconUrl(site)
+    }));
 }
 
 /**
@@ -59,6 +82,33 @@ export async function getCollections(token: string, siteId: string): Promise<Web
     );
 
     return response.data.collections || [];
+}
+
+/**
+ * Get total item count for a collection
+ */
+export async function getCollectionCount(token: string, collectionId: string): Promise<number> {
+    try {
+        const response = await axios.get(
+            `${WEBFLOW_BASE_URL}/collections/${collectionId}/items`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                params: {
+                    limit: 1,
+                    offset: 0
+                }
+            }
+        );
+        
+        // For V2 API, the count is often in pagination object
+        // We'll try to inspect the response more carefully
+        return response.data.pagination?.total ?? response.data.count ?? 0;
+    } catch (error) {
+        console.error('Error fetching collection count:', error);
+        return 0;
+    }
 }
 
 /**
