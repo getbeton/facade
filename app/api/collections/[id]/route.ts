@@ -4,9 +4,10 @@ import { encrypt } from '@/lib/crypto';
 
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
@@ -17,7 +18,7 @@ export async function DELETE(
         const { error } = await supabase
             .from('collections')
             .delete()
-            .eq('id', params.id)
+            .eq('id', id)
             .eq('user_id', user.id);
 
         if (error) {
@@ -32,9 +33,10 @@ export async function DELETE(
 
 export async function PATCH(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
@@ -52,7 +54,7 @@ export async function PATCH(
         const { error } = await supabase
             .from('collections')
             .update(updates)
-            .eq('id', params.id)
+            .eq('id', id)
             .eq('user_id', user.id);
 
         if (error) {

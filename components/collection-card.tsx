@@ -93,11 +93,9 @@ export function CollectionCard({ collection, onEditKeys }: CollectionCardProps) 
             </CardContent>
 
             <CardFooter className="pt-4 border-t flex gap-2">
-                <Button asChild className="flex-1" size="sm">
-                    <Link href={`/collection/${collection.id}`}>
-                        <ImageIcon className="mr-2 h-4 w-4" />
-                        Manage Images
-                    </Link>
+                <Button className="flex-1" size="sm" render={<Link href={`/collection/${collection.id}`} />}>
+                    <ImageIcon className="mr-2 h-4 w-4" />
+                    Manage Images
                 </Button>
                 <Button variant="outline" size="icon" className="h-9 w-9" onClick={onEditKeys}>
                     <Settings className="h-4 w-4" />
