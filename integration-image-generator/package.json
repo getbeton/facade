@@ -1,0 +1,22 @@
+{
+  "name": "beton-ai-scripts",
+  "version": "1.0.0",
+  "description": "One-time scripts for Beton AI",
+  "main": "index.js",
+  "scripts": {
+    "list": "node list-integrations.js",
+    "test": "node test-single-integration.js",
+    "test:apollo": "node test-single-integration.js apollo-integration-beton",
+    "generate": "node generate-integration-images-dalle.js",
+    "generate-images": "node generate-integration-images-dalle.js",
+    "generate-images-gemini": "node generate-integration-images.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "@google/generative-ai": "^0.21.0",
+    "openai": "^4.63.0",
+    "form-data": "^4.0.0",
+    "dotenv": "^16.3.1"
+  }
+}
+
