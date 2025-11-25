@@ -3,7 +3,13 @@
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
+import {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectPopup,
+    SelectItem,
+} from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -12,8 +18,9 @@ import {
     CardHeader,
     CardTitle,
     CardDescription,
-    CardContent,
+    CardPanel,
 } from '@/components/ui/card';
+import { Field, FieldLabel } from '@/components/ui/field';
 import {
     Table,
     TableHeader,
@@ -275,7 +282,7 @@ export default function Home() {
                             setProgress(data.progress);
                             if (data.total) {
                                 const percentage = Math.round((data.progress / data.total) * 100);
-                                setStatusMessage(`${percentage}% complete (${data.progress}/${data.total})`);
+                                statusMessage && setStatusMessage(`${percentage}% complete (${data.progress}/${data.total})`);
                             }
                         }
                         if (data.currentItem) setCurrentItem(data.currentItem);
@@ -360,10 +367,10 @@ export default function Home() {
                             Enter your API keys to get started. Keys are not stored.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardPanel className="space-y-4">
                         {/* Webflow API Key */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Webflow API Token</label>
+                        <Field className="space-y-2">
+                            <FieldLabel>Webflow API Token</FieldLabel>
                             <div className="flex gap-2">
                                 <Input
                                     type="password"
@@ -373,8 +380,7 @@ export default function Home() {
                                         setWebflowApiKey(e.target.value);
                                         setWebflowValid(null);
                                     }}
-                                    success={webflowValid === true}
-                                    error={webflowValid === false}
+                                    className={webflowValid === true ? "border-green-500" : webflowValid === false ? "border-destructive" : ""}
                                 />
                                 <Button onClick={validateWebflow} disabled={!webflowApiKey}>
                                     Validate
@@ -386,11 +392,11 @@ export default function Home() {
                             {webflowValid === false && (
                                 <p className="text-sm text-destructive">✗ Invalid</p>
                             )}
-                        </div>
+                        </Field>
 
                         {/* OpenAI API Key */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">OpenAI API Key</label>
+                        <Field className="space-y-2">
+                            <FieldLabel>OpenAI API Key</FieldLabel>
                             <div className="flex gap-2">
                                 <Input
                                     type="password"
@@ -400,8 +406,7 @@ export default function Home() {
                                         setOpenaiApiKey(e.target.value);
                                         setOpenaiValid(null);
                                     }}
-                                    success={openaiValid === true}
-                                    error={openaiValid === false}
+                                    className={openaiValid === true ? "border-green-500" : openaiValid === false ? "border-destructive" : ""}
                                 />
                                 <Button onClick={validateOpenAI} disabled={!openaiApiKey}>
                                     Validate
@@ -413,8 +418,8 @@ export default function Home() {
                             {openaiValid === false && (
                                 <p className="text-sm text-destructive">✗ Invalid</p>
                             )}
-                        </div>
-                    </CardContent>
+                        </Field>
+                    </CardPanel>
                 </Card>
 
                 {/* Step 2: Site Selection */}
@@ -426,18 +431,18 @@ export default function Home() {
                                 Choose the Webflow site you want to manage
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardPanel>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {sites.map((site) => (
                                     <Card
                                         key={site.id}
                                         className={`cursor-pointer transition-all ${selectedSite === site.id
-                                                ? 'ring-2 ring-primary'
-                                                : 'hover:border-primary/50'
+                                            ? 'ring-2 ring-primary'
+                                            : 'hover:border-primary/50'
                                             }`}
                                         onClick={() => handleSiteSelect(site.id)}
                                     >
-                                        <CardContent className="p-4">
+                                        <CardPanel className="p-4">
                                             <div className="flex items-start justify-between">
                                                 <div className="space-y-1">
                                                     <h3 className="font-semibold">{site.displayName}</h3>
@@ -451,11 +456,11 @@ export default function Home() {
                                                     <div className="text-primary">✓</div>
                                                 )}
                                             </div>
-                                        </CardContent>
+                                        </CardPanel>
                                     </Card>
                                 ))}
                             </div>
-                        </CardContent>
+                        </CardPanel>
                     </Card>
                 )}
 
@@ -468,19 +473,23 @@ export default function Home() {
                                 Choose the CMS collection to manage
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-2">
+                        <CardPanel className="space-y-2">
                             <Select
                                 value={selectedCollection}
-                                onChange={(e) => handleCollectionSelect(e.target.value)}
+                                onValueChange={(value) => handleCollectionSelect(value)}
                             >
-                                <option value="">Choose a collection...</option>
-                                {collections.map((collection) => (
-                                    <option key={collection.id} value={collection.id}>
-                                        {collection.displayName} (ID: {collection.id})
-                                    </option>
-                                ))}
+                                <SelectTrigger>
+                                    <SelectValue>Choose a collection...</SelectValue>
+                                </SelectTrigger>
+                                <SelectPopup>
+                                    {collections.map((collection) => (
+                                        <SelectItem key={collection.id} value={collection.id}>
+                                            {collection.displayName} (ID: {collection.id})
+                                        </SelectItem>
+                                    ))}
+                                </SelectPopup>
                             </Select>
-                        </CardContent>
+                        </CardPanel>
                     </Card>
                 )}
 
@@ -489,7 +498,7 @@ export default function Home() {
                     <>
                         {/* Toolbar */}
                         <Card>
-                            <CardContent className="p-4">
+                            <CardPanel className="p-4">
                                 <div className="flex flex-wrap gap-4 items-center justify-between">
                                     <div className="flex gap-2 items-center">
                                         <Input
@@ -521,7 +530,7 @@ export default function Home() {
                                         </Button>
                                     </div>
                                 </div>
-                            </CardContent>
+                            </CardPanel>
                         </Card>
 
                         {/* Items Table */}
@@ -532,14 +541,14 @@ export default function Home() {
                                     {filteredItems.length} items • Click cell to edit • Select rows for bulk operations
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
+                            <CardPanel>
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead className="w-12">
                                                 <Checkbox
                                                     checked={selectedItems.size === filteredItems.length && filteredItems.length > 0}
-                                                    onChange={toggleSelectAll}
+                                                    onCheckedChange={toggleSelectAll}
                                                 />
                                             </TableHead>
                                             {fieldNames.slice(0, 8).map((field) => (
@@ -567,7 +576,7 @@ export default function Home() {
                                                 <TableCell>
                                                     <Checkbox
                                                         checked={selectedItems.has(item.id)}
-                                                        onChange={() => toggleItemSelection(item.id)}
+                                                        onCheckedChange={() => toggleItemSelection(item.id)}
                                                     />
                                                 </TableCell>
                                                 {fieldNames.slice(0, 8).map((field) => (
@@ -606,7 +615,7 @@ export default function Home() {
                                         ))}
                                     </TableBody>
                                 </Table>
-                            </CardContent>
+                            </CardPanel>
                         </Card>
                     </>
                 )}
@@ -617,7 +626,7 @@ export default function Home() {
                         <CardHeader>
                             <CardTitle>Generation Progress</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardPanel className="space-y-4">
                             {total > 0 && (
                                 <Progress value={(progress / total) * 100} />
                             )}
@@ -629,13 +638,13 @@ export default function Home() {
                             {statusMessage && (
                                 <p className="text-sm text-muted-foreground">{statusMessage}</p>
                             )}
-                        </CardContent>
+                        </CardPanel>
                     </Card>
                 )}
 
                 {/* Error Alert */}
                 {error && (
-                    <Alert variant="destructive">
+                    <Alert variant="error">
                         <AlertTitle>Error</AlertTitle>
                         <AlertDescription>{error}</AlertDescription>
                     </Alert>
