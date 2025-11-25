@@ -2,6 +2,11 @@ import crypto from 'crypto'
 
 const ALGORITHM = 'aes-256-gcm'
 const KEY_STRING = process.env.ENCRYPTION_KEY || '0'.repeat(64)
+
+if (KEY_STRING.length !== 64) {
+    throw new Error(`Invalid ENCRYPTION_KEY length: ${KEY_STRING.length}. Must be 64 hex characters (32 bytes).`)
+}
+
 const KEY = Buffer.from(KEY_STRING, 'hex') // Must be 32 bytes (64 hex chars)
 
 /**

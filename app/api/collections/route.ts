@@ -9,7 +9,7 @@ import { validateOpenAIKey } from '@/lib/openai';
 export async function GET(request: NextRequest) {
     try {
         const supabase = await createClient();
-        
+
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -51,19 +51,20 @@ export async function POST(request: NextRequest) {
     try {
         const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-        
+
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const body = await request.json();
-        const { 
+        console.log('[POST /api/collections] Request body received');
+        const {
             // Site Data
             siteId, siteName, siteShortName, sitePreviewUrl, siteFaviconUrl,
             // Collection Data
             webflowCollectionId, collectionDisplayName,
             // Keys
-            webflowApiKey, openaiApiKey 
+            webflowApiKey, openaiApiKey
         } = body;
 
         // Basic validation
@@ -72,12 +73,15 @@ export async function POST(request: NextRequest) {
         }
 
         // Validate OpenAI Key
+        console.log('[POST /api/collections] Validating OpenAI Key...');
         const isValidOpenAI = await validateOpenAIKey(openaiApiKey);
+        console.log('[POST /api/collections] OpenAI Key validation result:', isValidOpenAI);
         if (!isValidOpenAI) {
             return NextResponse.json({ error: 'Invalid OpenAI API Key' }, { status: 400 });
         }
 
         // 1. Upsert Site
+        console.log('[POST /api/collections] Upserting site:', siteId);
         const { error: siteError } = await supabase
             .from('sites')
             .upsert({
@@ -96,6 +100,8 @@ export async function POST(request: NextRequest) {
         }
 
         // 2. Create Collection
+        console.log('[POST /api/collections] Creating collection for site:', siteId);
+        console.log('[POST /api/collections] Encrypting keys...');
         const { data: collection, error: collectionError } = await supabase
             .from('collections')
             .insert({
@@ -117,6 +123,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ collection });
     } catch (error) {
         console.error('Error in POST /api/collections:', error);
+        // Log full stack trace if available
+        if (error instanceof Error) {
+            console.error('Stack trace:', error.stack);
+            return NextResponse.json({
+                error: 'Internal Server Error',
+                details: error.message
+            }, { status: 500 });
+        }
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
