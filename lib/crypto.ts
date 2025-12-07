@@ -1,13 +1,14 @@
 import crypto from 'crypto'
 
 const ALGORITHM = 'aes-256-gcm'
-const KEY_STRING = process.env.ENCRYPTION_KEY || '0'.repeat(64)
 
-if (KEY_STRING.length !== 64) {
-    throw new Error(`Invalid ENCRYPTION_KEY length: ${KEY_STRING.length}. Must be 64 hex characters (32 bytes).`)
+function getKey(): Buffer {
+    const keyString = process.env.ENCRYPTION_KEY || '0'.repeat(64)
+    if (keyString.length !== 64) {
+        throw new Error(`Invalid ENCRYPTION_KEY length: ${keyString.length}. Must be 64 hex characters (32 bytes).`)
+    }
+    return Buffer.from(keyString, 'hex')
 }
-
-const KEY = Buffer.from(KEY_STRING, 'hex') // Must be 32 bytes (64 hex chars)
 
 /**
  * Encrypts a plaintext string using AES-256-GCM
@@ -16,7 +17,7 @@ const KEY = Buffer.from(KEY_STRING, 'hex') // Must be 32 bytes (64 hex chars)
  */
 export function encrypt(plaintext: string): string {
     const iv = crypto.randomBytes(16)
-    const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv)
+    const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv)
 
     let encrypted = cipher.update(plaintext, 'utf8', 'hex')
     encrypted += cipher.final('hex')
@@ -37,7 +38,7 @@ export function decrypt(ciphertext: string): string {
 
     const iv = Buffer.from(ivHex, 'hex')
     const authTag = Buffer.from(authTagHex, 'hex')
-    const decipher = crypto.createDecipheriv(ALGORITHM, KEY, iv)
+    const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv)
 
     decipher.setAuthTag(authTag)
 

@@ -1,12 +1,12 @@
 "use client";
 
-import { Field as FieldPrimitive } from "@base-ui-components/react/field";
-
+import * as React from "react";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-function Field({ className, ...props }: FieldPrimitive.Root.Props) {
+function Field({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <FieldPrimitive.Root
+    <div
       className={cn("flex flex-col items-start gap-2", className)}
       data-slot="field"
       {...props}
@@ -14,10 +14,10 @@ function Field({ className, ...props }: FieldPrimitive.Root.Props) {
   );
 }
 
-function FieldLabel({ className, ...props }: FieldPrimitive.Label.Props) {
+function FieldLabel({ className, ...props }: React.ComponentProps<typeof Label>) {
   return (
-    <FieldPrimitive.Label
-      className={cn("inline-flex items-center gap-2 text-sm/4", className)}
+    <Label
+      className={cn("data-[invalid]:text-destructive", className)}
       data-slot="field-label"
       {...props}
     />
@@ -27,9 +27,9 @@ function FieldLabel({ className, ...props }: FieldPrimitive.Label.Props) {
 function FieldDescription({
   className,
   ...props
-}: FieldPrimitive.Description.Props) {
+}: React.ComponentProps<"p">) {
   return (
-    <FieldPrimitive.Description
+    <p
       className={cn("text-muted-foreground text-xs", className)}
       data-slot="field-description"
       {...props}
@@ -37,24 +37,19 @@ function FieldDescription({
   );
 }
 
-function FieldError({ className, ...props }: FieldPrimitive.Error.Props) {
+function FieldError({ className, ...props }: React.ComponentProps<"p">) {
   return (
-    <FieldPrimitive.Error
-      className={cn("text-destructive-foreground text-xs", className)}
+    <p
+      className={cn("text-destructive text-xs font-medium", className)}
       data-slot="field-error"
       {...props}
     />
   );
 }
 
-const FieldControl = FieldPrimitive.Control;
-const FieldValidity = FieldPrimitive.Validity;
-
 export {
   Field,
   FieldLabel,
   FieldDescription,
   FieldError,
-  FieldControl,
-  FieldValidity,
 };

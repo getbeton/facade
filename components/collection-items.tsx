@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { WebflowCollectionItem } from '@/lib/types'
+import { useEffect, useState, useCallback } from 'react'
+import { WebflowCollectionItem, BillingCheckResponse, GenerationStatus } from '@/lib/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Loader2, ArrowLeft, ExternalLink } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Progress, ProgressTrack, ProgressIndicator } from '@/components/ui/progress'
+import { Loader2, ArrowLeft, Sparkles, CreditCard, Zap } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import {
     Table,
@@ -20,21 +22,57 @@ interface CollectionItemsProps {
     collectionId: string
 }
 
+// Generation stream message type
+interface StreamMessage {
+    status: 'processing' | 'success' | 'error'
+    message?: string
+    currentItem?: string
+    progress?: number
+    total?: number
+    completedCount?: number
+    failedCount?: number
+    freeTierUsed?: number
+    billingMode?: string
+}
+
+import { SeoReview } from '@/components/seo-review'
+
 export function CollectionItems({ collectionId }: CollectionItemsProps) {
     const router = useRouter()
+    const [activeTab, setActiveTab] = useState<'images' | 'seo'>('images')
+    
+    // Item data state
     const [items, setItems] = useState<WebflowCollectionItem[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
+    
+    // Selection state
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    
+    // Billing state
+    const [billingStatus, setBillingStatus] = useState<BillingCheckResponse | null>(null)
+    const [checkingBilling, setCheckingBilling] = useState(false)
+    
+    // Generation state
+    const [generationStatus, setGenerationStatus] = useState<GenerationStatus>({
+        status: 'idle',
+        progress: 0,
+        total: 0
+    })
+    const [generationMessage, setGenerationMessage] = useState('')
 
+    // Fetch items on mount
     useEffect(() => {
         fetchItems()
     }, [collectionId])
 
+    // Fetch collection items from API
     const fetchItems = async () => {
         try {
             setLoading(true)
+            setError('')
             const response = await fetch(`/api/items?collectionId=${collectionId}`)
-            
+
             if (!response.ok) {
                 const data = await response.json()
                 throw new Error(data.error || 'Failed to fetch items')
@@ -49,6 +87,219 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         }
     }
 
+    // Toggle selection for a single item
+    const toggleSelection = (itemId: string) => {
+        const newSelected = new Set(selectedIds)
+        if (newSelected.has(itemId)) {
+            newSelected.delete(itemId)
+        } else {
+            newSelected.add(itemId)
+        }
+        setSelectedIds(newSelected)
+        setBillingStatus(null) // Reset billing status when selection changes
+    }
+
+    // Select all items
+    const selectAll = () => {
+        if (selectedIds.size === items.length) {
+            setSelectedIds(new Set())
+        } else {
+            setSelectedIds(new Set(items.map(item => item.id)))
+        }
+        setBillingStatus(null)
+    }
+
+    // Check billing status for selected items
+    const checkBillingStatus = async () => {
+        if (selectedIds.size === 0) return
+
+        try {
+            setCheckingBilling(true)
+            const response = await fetch('/api/billing/check-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    collectionId,
+                    itemCount: selectedIds.size
+                })
+            })
+
+            if (!response.ok) {
+                throw new Error('Failed to check billing status')
+            }
+
+            const data: BillingCheckResponse = await response.json()
+            setBillingStatus(data)
+        } catch (err: any) {
+            console.error('Billing check error:', err)
+            setError(err.message || 'Failed to check billing status')
+        } finally {
+            setCheckingBilling(false)
+        }
+    }
+
+    // Handle generate button click
+    const handleGenerate = async () => {
+        if (selectedIds.size === 0) return
+
+        // First check billing status
+        if (!billingStatus) {
+            await checkBillingStatus()
+            return
+        }
+
+        // If payment required, redirect to checkout
+        if (billingStatus.requiresPayment) {
+            await startCheckout()
+            return
+        }
+
+        // Otherwise, start generation (free tier or own API key)
+        await startGeneration()
+    }
+
+    // Start Stripe checkout for paid items
+    const startCheckout = async () => {
+        try {
+            setGenerationStatus({ status: 'processing', progress: 0, total: 0 })
+            setGenerationMessage('Redirecting to payment...')
+
+            const response = await fetch('/api/stripe/create-checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    collectionDbId: collectionId,
+                    itemIds: Array.from(selectedIds),
+                    collectionName: 'Collection' // Could fetch actual name
+                })
+            })
+
+            if (!response.ok) {
+                throw new Error('Failed to create checkout session')
+            }
+
+            const data = await response.json()
+            if (data.url) {
+                window.location.href = data.url
+            }
+        } catch (err: any) {
+            console.error('Checkout error:', err)
+            setGenerationStatus({ status: 'error', progress: 0, total: 0 })
+            setGenerationMessage(err.message || 'Failed to start checkout')
+        }
+    }
+
+    // Start image generation (free tier or own API key)
+    const startGeneration = async (paymentId?: string) => {
+        try {
+            setGenerationStatus({ status: 'processing', progress: 0, total: selectedIds.size })
+            setGenerationMessage('Starting generation...')
+
+            const response = await fetch('/api/generate-images', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    collectionId,
+                    itemIds: Array.from(selectedIds),
+                    paymentId
+                })
+            })
+
+            if (!response.ok) {
+                throw new Error('Failed to start generation')
+            }
+
+            // Handle streaming response
+            const reader = response.body?.getReader()
+            const decoder = new TextDecoder()
+
+            if (!reader) {
+                throw new Error('No response stream')
+            }
+
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                const chunk = decoder.decode(value)
+                const lines = chunk.split('\n').filter(Boolean)
+
+                for (const line of lines) {
+                    try {
+                        const message: StreamMessage = JSON.parse(line)
+                        
+                        setGenerationMessage(message.message || '')
+                        
+                        if (message.progress !== undefined && message.total !== undefined) {
+                            setGenerationStatus(prev => ({
+                                ...prev,
+                                status: message.status === 'error' ? 'error' : 'processing',
+                                progress: message.progress!,
+                                total: message.total!,
+                                currentItem: message.currentItem
+                            }))
+                        }
+
+                        if (message.status === 'success') {
+                            setGenerationStatus({
+                                status: 'success',
+                                progress: message.total || selectedIds.size,
+                                total: message.total || selectedIds.size
+                            })
+                            // Refresh items after successful generation
+                            await fetchItems()
+                            // Clear selection
+                            setSelectedIds(new Set())
+                            setBillingStatus(null)
+                        }
+                    } catch (e) {
+                        // Ignore JSON parse errors for incomplete chunks
+                    }
+                }
+            }
+        } catch (err: any) {
+            console.error('Generation error:', err)
+            setGenerationStatus({ status: 'error', progress: 0, total: 0 })
+            setGenerationMessage(err.message || 'Generation failed')
+        }
+    }
+
+    // Render billing status badge
+    const renderBillingBadge = () => {
+        if (!billingStatus) return null
+
+        if (billingStatus.reason === 'own_api_key') {
+            return (
+                <Badge className="bg-green-500 text-white">
+                    <Zap className="h-3 w-3 mr-1" />
+                    Using your API key - Free
+                </Badge>
+            )
+        }
+
+        if (billingStatus.reason === 'free_tier') {
+            return (
+                <Badge className="bg-blue-500 text-white">
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    {billingStatus.remainingFreeGenerations} free generations remaining
+                </Badge>
+            )
+        }
+
+        if (billingStatus.requiresPayment) {
+            const amount = ((billingStatus.amountCents || 0) / 100).toFixed(2)
+            return (
+                <Badge variant="secondary">
+                    <CreditCard className="h-3 w-3 mr-1" />
+                    {billingStatus.freeItemsCount || 0} free + {billingStatus.itemsToCharge} paid (${amount})
+                </Badge>
+            )
+        }
+
+        return null
+    }
+
+    // Loading state
     if (loading) {
         return (
             <div className="flex items-center justify-center py-12">
@@ -57,7 +308,8 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         )
     }
 
-    if (error) {
+    // Error state
+    if (error && items.length === 0) {
         return (
             <div className="space-y-4">
                 <Button variant="outline" onClick={() => router.back()}>
@@ -77,8 +329,14 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         )
     }
 
+    const isGenerating = generationStatus.status === 'processing'
+    const progressPercent = generationStatus.total > 0 
+        ? (generationStatus.progress / generationStatus.total) * 100 
+        : 0
+
     return (
         <div className="space-y-6">
+            {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -88,22 +346,133 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
                         <h2 className="text-3xl font-bold tracking-tight">Collection Items</h2>
                     </div>
                     <p className="text-muted-foreground pl-12">
-                        Manage items and generate images for this collection
+                        Manage your collection items
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button onClick={fetchItems} variant="outline">
+                    <div className="flex items-center rounded-lg border p-1 bg-muted">
+                        <Button 
+                            variant={activeTab === 'images' ? 'secondary' : 'ghost'} 
+                            size="sm"
+                            onClick={() => setActiveTab('images')}
+                            className="h-8"
+                        >
+                            Image Generation
+                        </Button>
+                        <Button 
+                            variant={activeTab === 'seo' ? 'secondary' : 'ghost'} 
+                            size="sm"
+                            onClick={() => setActiveTab('seo')}
+                            className="h-8"
+                        >
+                            SEO Audit
+                        </Button>
+                    </div>
+                    <Button onClick={fetchItems} variant="outline" disabled={isGenerating}>
                         Refresh
                     </Button>
                 </div>
             </div>
 
+            {activeTab === 'seo' ? (
+                <SeoReview collectionId={collectionId} />
+            ) : (
+                <div className="space-y-6">
+                    {/* Generation Progress */}
+            {(isGenerating || generationStatus.status === 'success' || generationStatus.status === 'error') && (
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-lg">
+                            {isGenerating ? 'Generating Images...' : 
+                             generationStatus.status === 'success' ? 'Generation Complete' : 'Generation Error'}
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Progress value={progressPercent}>
+                            <ProgressTrack>
+                                <ProgressIndicator />
+                            </ProgressTrack>
+                        </Progress>
+                        <p className="text-sm text-muted-foreground">
+                            {generationMessage || `${generationStatus.progress} / ${generationStatus.total} items`}
+                        </p>
+                        {generationStatus.currentItem && isGenerating && (
+                            <p className="text-sm">
+                                Current: <span className="font-medium">{generationStatus.currentItem}</span>
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Selection Actions */}
+            {selectedIds.size > 0 && !isGenerating && (
+                <Card>
+                    <CardContent className="flex items-center justify-between py-4">
+                        <div className="flex items-center gap-4">
+                            <span className="font-medium">{selectedIds.size} items selected</span>
+                            {renderBillingBadge()}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button 
+                                variant="outline" 
+                                onClick={() => {
+                                    setSelectedIds(new Set())
+                                    setBillingStatus(null)
+                                }}
+                            >
+                                Clear Selection
+                            </Button>
+                            <Button 
+                                onClick={handleGenerate}
+                                disabled={checkingBilling}
+                            >
+                                {checkingBilling ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Checking...
+                                    </>
+                                ) : billingStatus?.requiresPayment ? (
+                                    <>
+                                        <CreditCard className="mr-2 h-4 w-4" />
+                                        Pay & Generate
+                                    </>
+                                ) : billingStatus ? (
+                                    <>
+                                        <Sparkles className="mr-2 h-4 w-4" />
+                                        Generate Images
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="mr-2 h-4 w-4" />
+                                        Check & Generate
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Items Table */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Items ({items.length})</CardTitle>
-                    <CardDescription>
-                        List of all items in this collection
-                    </CardDescription>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle>Items ({items.length})</CardTitle>
+                            <CardDescription>
+                                Select items to generate images
+                            </CardDescription>
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={selectAll}
+                            disabled={isGenerating}
+                        >
+                            {selectedIds.size === items.length ? 'Deselect All' : 'Select All'}
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {items.length === 0 ? (
@@ -115,15 +484,32 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
+                                        <TableHead className="w-12">
+                                            <Checkbox
+                                                checked={selectedIds.size === items.length && items.length > 0}
+                                                indeterminate={selectedIds.size > 0 && selectedIds.size < items.length}
+                                                onCheckedChange={() => selectAll()}
+                                                disabled={isGenerating}
+                                            />
+                                        </TableHead>
                                         <TableHead>Name</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Last Updated</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {items.map((item) => (
-                                        <TableRow key={item.id}>
+                                        <TableRow 
+                                            key={item.id}
+                                            className={selectedIds.has(item.id) ? 'bg-muted/50' : ''}
+                                        >
+                                            <TableCell>
+                                                <Checkbox
+                                                    checked={selectedIds.has(item.id)}
+                                                    onCheckedChange={() => toggleSelection(item.id)}
+                                                    disabled={isGenerating}
+                                                />
+                                            </TableCell>
                                             <TableCell className="font-medium">
                                                 {item.fieldData.name || item.fieldData['tool-name'] || 'Untitled'}
                                             </TableCell>
@@ -131,16 +517,15 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
                                                 <div className="flex gap-2">
                                                     {item.isDraft && <Badge variant="secondary">Draft</Badge>}
                                                     {item.isArchived && <Badge variant="outline">Archived</Badge>}
-                                                    {!item.isDraft && !item.isArchived && <Badge className="bg-green-500">Published</Badge>}
+                                                    {!item.isDraft && !item.isArchived && (
+                                                        <Badge className="bg-green-500">Published</Badge>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                {item.lastUpdated ? new Date(item.lastUpdated).toLocaleDateString() : '-'}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button size="sm" variant="ghost">
-                                                    View Details
-                                                </Button>
+                                                {item.lastUpdated 
+                                                    ? new Date(item.lastUpdated).toLocaleDateString() 
+                                                    : '-'}
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -150,9 +535,8 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
                     )}
                 </CardContent>
             </Card>
+            </div>
+            )}
         </div>
     )
 }
-
-
-

@@ -255,6 +255,33 @@ export async function updateCollectionItem(
 }
 
 /**
+ * Create a single collection item
+ */
+export async function createCollectionItem(
+    token: string,
+    collectionId: string,
+    fieldData: Record<string, any>,
+    isArchived: boolean = false,
+    isDraft: boolean = false
+): Promise<WebflowCollectionItem> {
+    const response = await axios.post(
+        `${WEBFLOW_BASE_URL}/collections/${collectionId}/items`,
+        {
+            isArchived,
+            isDraft,
+            fieldData
+        },
+        {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        }
+    );
+    return response.data;
+}
+
+/**
  * Delete a single collection item
  */
 export async function deleteCollectionItem(

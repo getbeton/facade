@@ -16,6 +16,7 @@
 # Misc
 .DS_Store
 *.pem
+misc/
 
 # Debug
 npm-debug.log*
@@ -33,9 +34,24 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+
 # Integration image generator (existing script)
 /integration-image-generator/node_modules
 /integration-image-generator/*.log
 /integration-image-generator/*.json
 !/integration-image-generator/package.json
 !/integration-image-generator/package-lock.json
+
+.claude/
+.claude/settings.local.json
+.claude/settings.local.jsonc
+.claude/settings.local.jsonc 
+
+audit-reports/
+audit-reports/fixes/
+audit-reports/fixes/fix-results-*.json
+audit-reports/fixes/fix-summary-*.md
+audit-reports/ACTION_PLAN.md
+audit-reports/ahrefs-audit-consolidated-2025-12-06.csv
+audit-reports/ahrefs-audit-report-2025-12-06.md
+

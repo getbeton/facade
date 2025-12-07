@@ -1,4 +1,39 @@
-<!-- 1d5bea28-d18c-45a8-92bd-0d522a7d8199 d5d75f21-53bc-4779-99ad-86d670260999 -->
+---
+name: Billing System Implementation Plan
+overview: ""
+todos:
+  - id: 04883f2d-c4a2-4b44-a74e-2147f3ca8bbb
+    content: Create database migration for billing tracking and generation logs
+    status: pending
+  - id: d1506753-62d8-4661-9526-c374cb9d8546
+    content: Add free tier tracking functions to stripe.ts library
+    status: pending
+  - id: 96998f17-70a8-4c95-817d-672c9db21b25
+    content: Create billing check-status API endpoint
+    status: pending
+  - id: 0fb76cd0-fef3-4256-a949-2e1b7adac49d
+    content: Update Stripe webhook to create generation_logs on payment
+    status: pending
+  - id: 92babe4b-1c39-4e60-a55d-b5610a006692
+    content: Add payment verification and logging to generate-images route
+    status: pending
+  - id: 1ce551ca-7dd3-4811-9a7b-5f8561869102
+    content: Add item selection UI to collection-items component
+    status: pending
+  - id: 3c755195-4462-4adf-8bd2-3296e71bede5
+    content: Update checkout creation to include itemIds metadata
+    status: pending
+  - id: 957bef77-92eb-471e-9e8e-0c619bbfef26
+    content: Auto-trigger generation from payment success page
+    status: pending
+  - id: 600539c6-986a-496c-af18-2d8cc5d7a022
+    content: Add TypeScript interfaces for billing and generation logs
+    status: pending
+  - id: daa37ef8-fb64-4370-bc49-e03ea82894e0
+    content: Run npm build and test complete billing flow
+    status: pending
+---
+
 # Billing System Implementation Plan
 
 ## Core Architecture
@@ -342,16 +377,3 @@
 8. Success page automation
 9. Testing & debugging
 10. Run `npm run build` to verify compilation
-
-### To-dos
-
-- [ ] Create database migration for billing tracking and generation logs
-- [ ] Add free tier tracking functions to stripe.ts library
-- [ ] Create billing check-status API endpoint
-- [ ] Update Stripe webhook to create generation_logs on payment
-- [ ] Add payment verification and logging to generate-images route
-- [ ] Add item selection UI to collection-items component
-- [ ] Update checkout creation to include itemIds metadata
-- [ ] Auto-trigger generation from payment success page
-- [ ] Add TypeScript interfaces for billing and generation logs
-- [ ] Run npm build and test complete billing flow

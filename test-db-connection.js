@@ -1,8 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
 
-// Manually pasting from .env.local since source command was failing/weird
-const supabaseUrl = 'https://sthidehegwyiwoishltl.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0aGlkZWhlZ3d5aXdvaXNobHRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwMjQ0MDEsImV4cCI6MjA3OTYwMDQwMX0.0bKOGzuOB0dzaZtfHJyKUohlOYb16eew9UmHB9TtEBc';
+// Use environment variables or local setup instructions
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'YOUR_SUPABASE_URL';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 

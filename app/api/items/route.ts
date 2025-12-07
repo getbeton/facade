@@ -30,12 +30,24 @@ export async function GET(request: NextRequest) {
         // Get the collection details including API key
         const { data: collection, error: collectionError } = await supabase
             .from('collections')
-            .select('webflow_api_key, webflow_collection_id')
+            .select(`
+                webflow_collection_id, 
+                site:sites (
+                    integration:integrations (
+                        encrypted_webflow_key
+                    )
+                )
+            `)
             .eq('id', collectionId)
             .eq('user_id', user.id)
             .single();
 
-        if (collectionError || !collection) {
+        const site = (collection as any)?.site;
+        const siteObj = Array.isArray(site) ? site[0] : site;
+        const integration = siteObj?.integration;
+        const integrationObj = Array.isArray(integration) ? integration[0] : integration;
+
+        if (collectionError || !collection || !integrationObj) {
             return NextResponse.json(
                 { error: 'Collection not found' },
                 { status: 404 }
@@ -43,7 +55,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Decrypt the API key
-        const webflowApiKey = decrypt(collection.webflow_api_key);
+        const webflowApiKey = decrypt(integrationObj.encrypted_webflow_key);
         const webflowCollectionId = collection.webflow_collection_id;
 
         // Fetch items using the decrypted API key and actual Webflow Collection ID

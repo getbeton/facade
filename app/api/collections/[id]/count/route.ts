@@ -19,16 +19,28 @@ export async function GET(
         // Get collection details including encrypted key
         const { data: collection, error } = await supabase
             .from('collections')
-            .select('webflow_collection_id, webflow_api_key')
+            .select(`
+                webflow_collection_id, 
+                site:sites (
+                    integration:integrations (
+                        encrypted_webflow_key
+                    )
+                )
+            `)
             .eq('id', id)
             .eq('user_id', user.id)
             .single();
 
-        if (error || !collection) {
+        const site = (collection as any)?.site;
+        const siteObj = Array.isArray(site) ? site[0] : site;
+        const integration = siteObj?.integration;
+        const integrationObj = Array.isArray(integration) ? integration[0] : integration;
+
+        if (error || !collection || !integrationObj) {
             return NextResponse.json({ error: 'Collection not found' }, { status: 404 });
         }
 
-        const webflowApiKey = decrypt(collection.webflow_api_key);
+        const webflowApiKey = decrypt(integrationObj.encrypted_webflow_key);
         const count = await getCollectionCount(webflowApiKey, collection.webflow_collection_id);
 
         return NextResponse.json({ count });

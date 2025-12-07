@@ -1,8 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 
 export async function createClient() {
     const cookieStore = await cookies()
+    const headerStore = await headers()
+    const authHeader = headerStore.get('authorization')
 
     return createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
@@ -24,6 +26,10 @@ export async function createClient() {
                     }
                 },
             },
+            // Forward Authorization header if present (allows API testing via Bearer token)
+            global: {
+                headers: authHeader ? { Authorization: authHeader } : undefined
+            }
         }
     )
 }

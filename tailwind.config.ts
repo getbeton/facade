@@ -7,6 +7,8 @@ const config: Config = {
 		"./components/**/*.{ts,tsx}",
 		"./app/**/*.{ts,tsx}",
 		"./src/**/*.{ts,tsx}",
+        "./lib/**/*.{ts,tsx}", // Added lib just in case
+        // Force refresh
 	],
 	theme: {
 		extend: {
