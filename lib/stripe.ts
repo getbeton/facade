@@ -15,7 +15,8 @@ export const stripe = new Stripe(STRIPE_SECRET_KEY, {
 
 // Pricing constants
 export const PRICE_PER_IMAGE_CENTS = 89 // $0.89 per image
-export const FREE_TIER_LIMIT = 5 // 5 free generations for users without their own API key
+// Base free allowance is 5 rows; actual free fields = 5 * visibleColumnsCount (passed from caller)
+export const FREE_TIER_BASE_ROWS = 5
 
 // Supabase admin client for server-side operations (bypasses RLS)
 const getSupabaseAdmin = () => {
@@ -30,8 +31,11 @@ const getSupabaseAdmin = () => {
  * @param userId - The user's UUID from auth
  * @returns FreeTierStatus object with used, remaining, and limit counts
  */
-export async function getUserFreeTierStatus(userId: string): Promise<FreeTierStatus> {
+export async function getUserFreeTierStatus(userId: string, visibleColumnsCount: number = 1): Promise<FreeTierStatus> {
     const supabase = getSupabaseAdmin()
+    
+    // Dynamic limit: 5 rows worth of visible columns
+    const dynamicLimit = Math.max(FREE_TIER_BASE_ROWS * Math.max(visibleColumnsCount, 1), 0)
     
     const { data: profile, error } = await supabase
         .from('profiles')
@@ -42,15 +46,15 @@ export async function getUserFreeTierStatus(userId: string): Promise<FreeTierSta
     if (error) {
         console.error('[getUserFreeTierStatus] Error fetching profile:', error)
         // Default to 0 used if we can't fetch (new user case)
-        return { used: 0, remaining: FREE_TIER_LIMIT, limit: FREE_TIER_LIMIT }
+        return { used: 0, remaining: dynamicLimit, limit: dynamicLimit }
     }
     
     const used = profile?.free_generations_used || 0
-    const remaining = Math.max(0, FREE_TIER_LIMIT - used)
+    const remaining = Math.max(0, dynamicLimit - used)
     
-    console.log(`[getUserFreeTierStatus] User ${userId}: used=${used}, remaining=${remaining}`)
+    console.log(`[getUserFreeTierStatus] User ${userId}: used=${used}, remaining=${remaining}, limit=${dynamicLimit}`)
     
-    return { used, remaining, limit: FREE_TIER_LIMIT }
+    return { used, remaining, limit: dynamicLimit }
 }
 
 /**
@@ -59,8 +63,9 @@ export async function getUserFreeTierStatus(userId: string): Promise<FreeTierSta
  * @param count - Number of free generations used in this batch
  * @returns Updated free tier status
  */
-export async function incrementFreeTierUsage(userId: string, count: number): Promise<FreeTierStatus> {
+export async function incrementFreeTierUsage(userId: string, count: number, visibleColumnsCount: number = 1): Promise<FreeTierStatus> {
     const supabase = getSupabaseAdmin()
+    const dynamicLimit = Math.max(FREE_TIER_BASE_ROWS * Math.max(visibleColumnsCount, 1), 0)
     
     // First get current usage
     const { data: profile, error: fetchError } = await supabase
@@ -75,7 +80,7 @@ export async function incrementFreeTierUsage(userId: string, count: number): Pro
     }
     
     const currentUsed = profile?.free_generations_used || 0
-    const newUsed = Math.min(currentUsed + count, FREE_TIER_LIMIT) // Cap at limit
+    const newUsed = Math.min(currentUsed + count, dynamicLimit) // Cap at limit
     
     // Update the count
     const { error: updateError } = await supabase
@@ -91,10 +96,10 @@ export async function incrementFreeTierUsage(userId: string, count: number): Pro
         throw new Error('Failed to update free tier usage')
     }
     
-    const remaining = Math.max(0, FREE_TIER_LIMIT - newUsed)
-    console.log(`[incrementFreeTierUsage] User ${userId}: incremented by ${count}, now used=${newUsed}, remaining=${remaining}`)
+    const remaining = Math.max(0, dynamicLimit - newUsed)
+    console.log(`[incrementFreeTierUsage] User ${userId}: incremented by ${count}, now used=${newUsed}, remaining=${remaining}, limit=${dynamicLimit}`)
     
-    return { used: newUsed, remaining, limit: FREE_TIER_LIMIT }
+    return { used: newUsed, remaining, limit: dynamicLimit }
 }
 
 /**
@@ -182,13 +187,13 @@ export async function getPaymentIntent(paymentIntentId: string) {
  * @param remainingFree - Number of free tier slots remaining
  * @returns Breakdown of free vs paid items and total cost
  */
-export function calculateBillingBreakdown(requestedItems: number, remainingFree: number): {
+export function calculateBillingBreakdown(requestedFields: number, remainingFreeFields: number): {
     freeItems: number
     paidItems: number
     totalCents: number
 } {
-    const freeItems = Math.min(requestedItems, remainingFree)
-    const paidItems = requestedItems - freeItems
+    const freeItems = Math.min(requestedFields, remainingFreeFields)
+    const paidItems = requestedFields - freeItems
     const totalCents = paidItems * PRICE_PER_IMAGE_CENTS
     
     return { freeItems, paidItems, totalCents }

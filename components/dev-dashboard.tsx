@@ -75,8 +75,8 @@ export default function DashboardPage() {
                     So we should NOT render MainHeader here again. 
                 */}
                 
-                <div className="border-b bg-muted/40 px-6 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <div className="border-b bg-muted/40 px-6 py-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="flex items-center gap-4 flex-wrap">
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-muted-foreground">Collections:</span>
                             <Select 
@@ -102,7 +102,7 @@ export default function DashboardPage() {
                         )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <Button 
                             size="sm" 
                             variant="default"

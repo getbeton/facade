@@ -61,7 +61,7 @@ export function GenerationDialog({
             <Badge variant="outline">{selectedCount}</Badge>
           </div>
           <div className="flex items-center justify-between">
-            <span>Text fields to generate (excluding slugs)</span>
+            <span>Fields to generate (visible columns)</span>
             <Badge variant="secondary">{fieldCount}</Badge>
           </div>
           {mode === "paid" && (

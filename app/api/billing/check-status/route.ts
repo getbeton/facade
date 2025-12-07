@@ -4,8 +4,7 @@ import { decrypt } from '@/lib/crypto'
 import { 
     getUserFreeTierStatus, 
     calculateBillingBreakdown,
-    PRICE_PER_IMAGE_CENTS,
-    FREE_TIER_LIMIT 
+    PRICE_PER_IMAGE_CENTS
 } from '@/lib/stripe'
 import { BillingCheckResponse } from '@/lib/types'
 
@@ -16,7 +15,8 @@ import { BillingCheckResponse } from '@/lib/types'
  * 
  * Request body:
  * - collectionId: string (our DB UUID)
- * - itemCount: number (number of items user wants to generate)
+ * - fieldCount: number (number of fields user wants to generate)
+ * - visibleColumnsCount: number (columns currently visible in UI, used for free limit)
  * 
  * Response:
  * - requiresPayment: boolean
@@ -40,17 +40,17 @@ export async function POST(request: NextRequest) {
 
         // 2. Parse request body
         const body = await request.json()
-        const { collectionId, itemCount } = body
+        const { collectionId, fieldCount, visibleColumnsCount = 1 } = body
 
-        if (!collectionId || typeof itemCount !== 'number' || itemCount < 1) {
-            console.log('[billing/check-status] Invalid request parameters:', { collectionId, itemCount })
+        if (!collectionId || typeof fieldCount !== 'number' || fieldCount < 1) {
+            console.log('[billing/check-status] Invalid request parameters:', { collectionId, fieldCount })
             return NextResponse.json(
-                { error: 'Invalid request parameters. Required: collectionId (string), itemCount (number > 0)' },
+                { error: 'Invalid request parameters. Required: collectionId (string), fieldCount (number > 0)' },
                 { status: 400 }
             )
         }
 
-        console.log(`[billing/check-status] User ${user.id}, collection ${collectionId}, ${itemCount} items`)
+        console.log(`[billing/check-status] User ${user.id}, collection ${collectionId}, ${fieldCount} fields, visibleColumns=${visibleColumnsCount}`)
 
         // 3. Get collection from DB and check if it has user's own OpenAI key
         const { data: collection, error: collectionError } = await supabase
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
             const response: BillingCheckResponse = {
                 requiresPayment: false,
                 reason: 'own_api_key',
-                remainingFreeGenerations: FREE_TIER_LIMIT, // Not applicable but included for consistency
+                remainingFreeGenerations: 0, // Not applicable but included for consistency
                 pricePerImageCents: PRICE_PER_IMAGE_CENTS
             }
             
@@ -127,12 +127,12 @@ export async function POST(request: NextRequest) {
         }
 
         // 6. User doesn't have own API key - check free tier status
-        const freeTierStatus = await getUserFreeTierStatus(user.id)
+        const freeTierStatus = await getUserFreeTierStatus(user.id, visibleColumnsCount)
         console.log(`[billing/check-status] Free tier status: used=${freeTierStatus.used}, remaining=${freeTierStatus.remaining}`)
 
         // 7. Calculate billing breakdown
         const { freeItems, paidItems, totalCents } = calculateBillingBreakdown(
-            itemCount, 
+            fieldCount, 
             freeTierStatus.remaining
         )
 
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
                 requiresPayment: false,
                 reason: 'free_tier',
                 remainingFreeGenerations: freeTierStatus.remaining,
-                remainingAfterGeneration: freeTierStatus.remaining - itemCount,
+                remainingAfterGeneration: freeTierStatus.remaining - fieldCount,
                 freeItemsCount: freeItems,
                 pricePerImageCents: PRICE_PER_IMAGE_CENTS
             }

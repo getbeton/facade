@@ -17,6 +17,15 @@ Check out our other tools and resources:
 - **Billing System**: Integrated Stripe billing for pay-as-you-go usage.
 - **SEO Tools**: Built-in SEO auditing and improvement suggestions (using Ahrefs data).
 
+## 🧠 Generation & publishing flow
+
+- All text edits and AI generations are **staged locally**; nothing is pushed to Webflow until you press **Publish**.
+- **Generate Selected** counts only the **visible columns** in the grid. If 9 rows are selected and 5 columns are visible, only 45 fields are generated.
+- **Free limit** = `5 * (visible columns)` fields. Usage is tracked per field; inline single-field generation consumes 1 free field if applicable.
+- **Inline actions**: click/drag-drop on image cells to stage uploads; use the wand button to generate a single field immediately (still staged).
+- **SEO/meta ready**: all CMS fields, including SEO/open graph fields returned by Webflow, are surfaced for editing and generation.
+- Generations run **field-by-field** with full row context and field names to keep prompts accurate and avoid failing entire batches.
+
 ## 🛠 Prerequisites
 
 - Node.js 18+
@@ -30,7 +39,7 @@ Check out our other tools and resources:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/webflow-cms-image-generator.git
+git clone https://github.com/getbeton/facade
 cd webflow-cms-image-generator
 npm install
 ```

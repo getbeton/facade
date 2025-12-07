@@ -12,8 +12,7 @@ import { decrypt } from '@/lib/crypto';
 import { 
     getUserFreeTierStatus, 
     incrementFreeTierUsage, 
-    PRICE_PER_IMAGE_CENTS,
-    FREE_TIER_LIMIT
+    PRICE_PER_IMAGE_CENTS
 } from '@/lib/stripe';
 
 // Admin client for server-side operations (bypasses RLS)
@@ -61,7 +60,7 @@ export async function POST(request: NextRequest) {
                 // 1. Parse and validate request
                 // ============================================================
                 const body = await request.json();
-                let { collectionId, itemIds, paymentId } = body;
+                let { collectionId, itemIds, paymentId, visibleColumnsCount = 1 } = body;
 
                 console.log(`[generate-images] Starting generation: collectionId=${collectionId}, items=${itemIds?.length || 0}, paymentId=${paymentId || 'none'}`);
 
@@ -165,7 +164,7 @@ export async function POST(request: NextRequest) {
                     console.log('[generate-images] Using own API key - no billing');
                 } else {
                     // User needs billing - check free tier and payment
-                    const freeTierStatus = await getUserFreeTierStatus(user.id);
+                    const freeTierStatus = await getUserFreeTierStatus(user.id, visibleColumnsCount);
                     remainingFree = freeTierStatus.remaining;
 
                     // Calculate how many can be free vs paid
@@ -438,7 +437,7 @@ export async function POST(request: NextRequest) {
                 
                 // Update free tier usage if applicable
                 if (freeTierUsed > 0 && !usesOwnApiKey) {
-                    await incrementFreeTierUsage(user.id, freeTierUsed);
+                    await incrementFreeTierUsage(user.id, freeTierUsed, visibleColumnsCount);
                     console.log(`[generate-images] Incremented free tier usage by ${freeTierUsed}`);
                 }
 

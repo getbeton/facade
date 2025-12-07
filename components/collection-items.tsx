@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { WebflowCollectionItem, BillingCheckResponse, GenerationStatus } from '@/lib/types'
+import { useEffect, useState, useMemo } from 'react'
+import { WebflowCollectionItem, BillingCheckResponse, GenerationStatus, FreeTierStatus } from '@/lib/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress, ProgressTrack, ProgressIndicator } from '@/components/ui/progress'
@@ -15,20 +15,11 @@ interface CollectionItemsProps {
     collectionId: string
 }
 
-// Generation stream message type
-interface StreamMessage {
-    status: 'processing' | 'success' | 'error'
-    message?: string
-    currentItem?: string
-    progress?: number
-    total?: number
-    completedCount?: number
-    failedCount?: number
-    freeTierUsed?: number
-    billingMode?: string
-}
-
 import { SeoReview } from '@/components/seo-review'
+
+type StagedField =
+    | { kind: 'text'; value: string }
+    | { kind: 'image'; value: string; fileName?: string }
 
 export function CollectionItems({ collectionId }: CollectionItemsProps) {
     const router = useRouter()
@@ -38,13 +29,16 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
     const [items, setItems] = useState<WebflowCollectionItem[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
+    const [stagedChanges, setStagedChanges] = useState<Record<string, Record<string, StagedField>>>({})
     
     // Selection state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [visibleColumns, setVisibleColumns] = useState<string[]>([])
     
     // Billing state
     const [billingStatus, setBillingStatus] = useState<BillingCheckResponse | null>(null)
     const [checkingBilling, setCheckingBilling] = useState(false)
+    const [freeStatus, setFreeStatus] = useState<FreeTierStatus | null>(null)
     
     // Generation state
     const [generationStatus, setGenerationStatus] = useState<GenerationStatus>({
@@ -66,6 +60,119 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         fetchItems()
     }, [collectionId])
 
+    const setStagedField = (itemId: string, fieldName: string, field: StagedField) => {
+        setStagedChanges((prev) => {
+            const next = { ...prev }
+            const itemFields = { ...(next[itemId] || {}) }
+            itemFields[fieldName] = field
+            next[itemId] = itemFields
+            return next
+        })
+    }
+
+    // Inline single-field generation for quick fills
+    const handleSingleFieldGenerate = async (rowId: string, columnId: string) => {
+        try {
+            const column = gridColumns.find(c => c.id === columnId)
+            if (!column) return
+            const item = mergedItems.find(i => i.id === rowId)
+            if (!item) return
+
+            console.log('[collection-items] single field generate', { rowId, columnId })
+            setGenerationStatus({ status: 'processing', progress: 0, total: 1 })
+            setGenerationMessage(`Generating ${column.label}...`)
+
+            const response = await fetch('/api/fields/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    collectionId,
+                    items: [{ id: rowId, fieldData: item.fieldData }],
+                    fields: [columnId],
+                    columnTypes: { [columnId]: column.type },
+                    visibleColumnsCount: generationColumns.length || 1
+                })
+            })
+
+            if (!response.ok) {
+                const data = await response.json()
+                throw new Error(data.error || 'Generation failed')
+            }
+
+            const data = await response.json()
+            const result = data.results?.[0]
+            if (result?.value) {
+                const kind: 'text' | 'image' = result.kind === 'image' ? 'image' : 'text'
+                setStagedField(rowId, columnId, { kind, value: result.value })
+            }
+
+            if (data.freeUsed) {
+                const limit = freeStatus?.limit ?? Math.max((generationColumns.length || 1) * 5, 0)
+                const used = (freeStatus?.used || 0) + data.freeUsed
+                setFreeStatus({
+                    used,
+                    remaining: Math.max(0, limit - used),
+                    limit
+                })
+            }
+
+            setGenerationStatus({ status: 'success', progress: 1, total: 1 })
+            setGenerationMessage('Generated. Remember to publish to push changes.')
+        } catch (err: any) {
+            console.error('Single field generation error:', err)
+            setGenerationStatus({ status: 'error', progress: 0, total: 0 })
+            setGenerationMessage(err.message || 'Generation failed')
+        }
+    }
+
+    const hasStagedChanges = useMemo(() => Object.keys(stagedChanges).length > 0, [stagedChanges])
+
+    const handlePublish = async () => {
+        if (!hasStagedChanges) return
+        try {
+            console.log('[collection-items] publish start', { changes: Object.keys(stagedChanges).length })
+            setGenerationStatus({ status: 'processing', progress: 0, total: Object.keys(stagedChanges).length })
+            setGenerationMessage('Publishing to Webflow...')
+
+            const response = await fetch('/api/items/publish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    collectionId,
+                    changes: stagedChanges
+                })
+            })
+
+            if (!response.ok) {
+                const data = await response.json()
+                throw new Error(data.error || 'Publish failed')
+            }
+
+            const result = await response.json()
+
+            // Apply staged changes to local items so UI reflects published data
+            setItems((prev) =>
+                prev.map((item) => {
+                    const pending = stagedChanges[item.id]
+                    if (!pending) return item
+                    const updatedFieldData = { ...item.fieldData }
+                    Object.entries(pending).forEach(([field, data]) => {
+                        updatedFieldData[field] = data.value
+                    })
+                    return { ...item, fieldData: updatedFieldData }
+                })
+            )
+
+            setStagedChanges({})
+            setGenerationStatus({ status: 'success', progress: result.success || 0, total: result.success || 0 })
+            setGenerationMessage('Published to Webflow successfully.')
+        } catch (err: any) {
+            console.error('Publish error:', err)
+            setGenerationStatus({ status: 'error', progress: 0, total: 0 })
+            setGenerationMessage(err.message || 'Publish failed')
+        }
+    }
+
     // Fetch collection items from API
     const fetchItems = async () => {
         try {
@@ -80,6 +187,10 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
 
             const data = await response.json()
             setItems(data.items || [])
+            setStagedChanges({})
+            setSelectedIds(new Set())
+            setBillingStatus(null)
+            setFreeStatus(null)
         } catch (err: any) {
             setError(err.message || 'Failed to load items')
         } finally {
@@ -92,13 +203,18 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         if (selectedIds.size === 0) return
 
         try {
+            console.log('[collection-items] checking billing status')
+            const { fieldCount } = computeFieldCounts()
+            if (fieldCount === 0) return
+
             setCheckingBilling(true)
             const response = await fetch('/api/billing/check-status', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     collectionId,
-                    itemCount: selectedIds.size
+                    fieldCount,
+                    visibleColumnsCount: generationColumns.length || 1
                 })
             })
 
@@ -108,6 +224,14 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
 
             const data: BillingCheckResponse = await response.json()
             setBillingStatus(data)
+            if (data.remainingFreeGenerations !== undefined) {
+                const limit = Math.max((generationColumns.length || 1) * 5, data.remainingFreeGenerations + (data.freeItemsCount || 0))
+                setFreeStatus({
+                    used: Math.max(0, limit - (data.remainingAfterGeneration ?? data.remainingFreeGenerations)),
+                    remaining: data.remainingFreeGenerations,
+                    limit
+                })
+            }
         } catch (err: any) {
             console.error('Billing check error:', err)
             setError(err.message || 'Failed to check billing status')
@@ -116,13 +240,14 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         }
     }
 
-    // Compute field count (text fields, excluding slug and images)
+    // Compute field count based on visible, non-slug columns
     const computeFieldCounts = () => {
-        const textColumns = gridColumns.filter(col => col.type !== 'Image' && col.id.toLowerCase() !== 'slug')
-        const selectedCount = selectedIds.size
-        const fieldCount = selectedCount * textColumns.length
-        const mode: 'byok' | 'paid' = billingStatus?.reason === 'own_api_key' ? 'byok' : 'paid'
-        return { selectedCount, fieldCount, mode }
+        const selectedCount = selectedIds.size;
+        const fieldCount = selectedCount * generationColumns.length;
+        const mode: 'byok' | 'paid' = billingStatus?.reason === 'own_api_key'
+            ? 'byok'
+            : (billingStatus?.requiresPayment ? 'paid' : 'byok');
+        return { selectedCount, fieldCount, mode };
     }
 
     const openConfirm = async () => {
@@ -143,116 +268,75 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
             await checkBillingStatus()
         }
 
-        if (billingStatus?.requiresPayment) {
-            await startCheckout()
-            setConfirmProcessing(false)
-            return
-        }
-
         await startGeneration()
         setConfirmProcessing(false)
         setConfirmOpen(false)
     }
 
-    // Start Stripe checkout for paid items
-    const startCheckout = async () => {
+    // Start field generation (text + images) without publishing
+    const startGeneration = async () => {
+        const { fieldCount } = computeFieldCounts()
+        if (fieldCount === 0) return
         try {
-            setGenerationStatus({ status: 'processing', progress: 0, total: 0 })
-            setGenerationMessage('Redirecting to payment...')
+            console.log('[collection-items] startGeneration', { fieldCount })
+            setGenerationStatus({ status: 'processing', progress: 0, total: fieldCount })
+            setGenerationMessage('Generating fields...')
 
-            const response = await fetch('/api/stripe/create-checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    collectionDbId: collectionId,
-                    itemIds: Array.from(selectedIds),
-                    collectionName: 'Collection' // Could fetch actual name
-                })
-            })
+            const selectedItems = mergedItems.filter(item => selectedIds.has(item.id)).map(item => ({
+                id: item.id,
+                fieldData: item.fieldData
+            }))
 
-            if (!response.ok) {
-                throw new Error('Failed to create checkout session')
-            }
+            const columnTypes = generationColumns.reduce<Record<string, GridColumn['type']>>((acc, col) => {
+                acc[col.id] = col.type
+                return acc
+            }, {})
 
-            const data = await response.json()
-            if (data.url) {
-                window.location.href = data.url
-            }
-        } catch (err: any) {
-            console.error('Checkout error:', err)
-            setGenerationStatus({ status: 'error', progress: 0, total: 0 })
-            setGenerationMessage(err.message || 'Failed to start checkout')
-        }
-    }
-
-    // Start image generation (free tier or own API key)
-    const startGeneration = async (paymentId?: string) => {
-        try {
-            setGenerationStatus({ status: 'processing', progress: 0, total: selectedIds.size })
-            setGenerationMessage('Starting generation...')
-
-            const response = await fetch('/api/generate-images', {
+            const response = await fetch('/api/fields/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     collectionId,
-                    itemIds: Array.from(selectedIds),
-                    paymentId
+                    items: selectedItems,
+                    fields: generationColumns.map(c => c.id),
+                    columnTypes,
+                    visibleColumnsCount: generationColumns.length || 1
                 })
             })
 
             if (!response.ok) {
-                throw new Error('Failed to start generation')
+                const data = await response.json()
+                throw new Error(data.error || 'Failed to start generation')
             }
 
-            // Handle streaming response
-            const reader = response.body?.getReader()
-            const decoder = new TextDecoder()
-
-            if (!reader) {
-                throw new Error('No response stream')
-            }
-
-            while (true) {
-                const { done, value } = await reader.read()
-                if (done) break
-
-                const chunk = decoder.decode(value)
-                const lines = chunk.split('\n').filter(Boolean)
-
-                for (const line of lines) {
-                    try {
-                        const message: StreamMessage = JSON.parse(line)
-                        
-                        setGenerationMessage(message.message || '')
-                        
-                        if (message.progress !== undefined && message.total !== undefined) {
-                            setGenerationStatus(prev => ({
-                                ...prev,
-                                status: message.status === 'error' ? 'error' : 'processing',
-                                progress: message.progress!,
-                                total: message.total!,
-                                currentItem: message.currentItem
-                            }))
-                        }
-
-                        if (message.status === 'success') {
-                            setGenerationStatus({
-                                status: 'success',
-                                progress: message.total || selectedIds.size,
-                                total: message.total || selectedIds.size
-                            })
-                            // Refresh items after successful generation
-                            await fetchItems()
-                            // Clear selection
-                            setSelectedIds(new Set())
-                            setBillingStatus(null)
-                        }
-                    } catch (e) {
-                        // Ignore JSON parse errors for incomplete chunks
-                    }
+            const data = await response.json()
+            let completed = 0
+            data.results.forEach((res: any) => {
+                if (res.value) {
+                    const kind: 'text' | 'image' = res.kind === 'image' ? 'image' : 'text'
+                    setStagedField(res.itemId, res.fieldName, { kind, value: res.value })
                 }
+                completed += 1
+            })
+
+            if (data.freeUsed) {
+                const limit = freeStatus?.limit ?? Math.max((generationColumns.length || 1) * 5, 0)
+                const used = (freeStatus?.used || 0) + data.freeUsed
+                setFreeStatus({
+                    used,
+                    remaining: Math.max(0, limit - used),
+                    limit
+                })
             }
+
+            setGenerationStatus({
+                status: 'success',
+                progress: completed,
+                total: fieldCount
+            })
+            setGenerationMessage('Generation complete. Review and publish to push changes to Webflow.')
+            setSelectedIds(new Set())
+            setBillingStatus(null)
         } catch (err: any) {
             console.error('Generation error:', err)
             setGenerationStatus({ status: 'error', progress: 0, total: 0 })
@@ -295,8 +379,20 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         return null
     }
 
+    // Merge staged changes into displayed data so edits/generation remain local until publish
+    const mergedItems = useMemo(() => {
+        return items.map((item) => {
+            const staged = stagedChanges[item.id] || {};
+            const mergedFieldData = { ...item.fieldData };
+            Object.entries(staged).forEach(([field, data]) => {
+                mergedFieldData[field] = data.value;
+            });
+            return { ...item, fieldData: mergedFieldData };
+        });
+    }, [items, stagedChanges]);
+
     // Transform items for grid
-    const gridData: GridRow[] = items.map((item, index) => ({
+    const gridData: GridRow[] = mergedItems.map((item, index) => ({
         id: item.id,
         displayId: String(index + 1), // Simple auto-increment for display
         data: item.fieldData,
@@ -306,9 +402,12 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
     // Generate columns from item data keys (simple inference)
     // Ideally this comes from schema or a defined config
     const inferColumns = (): GridColumn[] => {
-        if (items.length === 0) return [];
-        const sample = items[0].fieldData;
-        return Object.keys(sample).map(key => ({
+        if (mergedItems.length === 0) return [];
+        const keys = new Set<string>();
+        mergedItems.forEach(item => {
+            Object.keys(item.fieldData).forEach(k => keys.add(k));
+        });
+        return Array.from(keys).map(key => ({
             id: key,
             label: key.charAt(0).toUpperCase() + key.slice(1).replace(/-/g, ' '),
             type: key.toLowerCase().includes('image') ? 'Image' : 'PlainText' // Simple heuristic
@@ -317,21 +416,33 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
 
     const gridColumns = inferColumns();
 
+    const generationColumns = useMemo(() => {
+        const base = gridColumns.filter(col => col.id.toLowerCase() !== 'slug');
+        if (visibleColumns.length === 0) return base;
+        return base.filter(col => visibleColumns.includes(col.id));
+    }, [gridColumns, visibleColumns]);
+
     const handleSelectionChange = (ids: string[]) => {
         setSelectedIds(new Set(ids));
         setBillingStatus(null);
     }
 
+    const handleVisibleColumnsChange = (cols: string[]) => {
+        setVisibleColumns(cols);
+    }
+
+    const handleImageUpload = (rowId: string, columnId: string, file: File) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const dataUrl = reader.result as string;
+            setStagedField(rowId, columnId, { kind: 'image', value: dataUrl, fileName: file.name });
+        };
+        reader.readAsDataURL(file);
+    };
+
     const handleCellEdit = (rowId: string, columnId: string, value: string) => {
-        // Don't allow editing slug
         if (columnId.toLowerCase() === 'slug') return
-        setItems((prev) =>
-            prev.map((item) =>
-                item.id === rowId
-                    ? { ...item, fieldData: { ...item.fieldData, [columnId]: value } }
-                    : item
-            )
-        )
+        setStagedField(rowId, columnId, { kind: 'text', value })
     }
 
     // Loading state
@@ -444,11 +555,13 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
                     {selectedIds.size > 0 && !isGenerating && (
                         <Card>
                             <CardContent className="flex items-center justify-between py-4">
-                                <div className="flex items-center gap-4">
-                                    <span className="font-medium">{selectedIds.size} items selected</span>
+                                <div className="flex items-center gap-4 flex-wrap">
+                                    <span className="font-medium">
+                                        {selectedIds.size} items selected · {computeFieldCounts().fieldCount} fields
+                                    </span>
                                     {renderBillingBadge()}
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <Button 
                                         variant="outline" 
                                         onClick={() => {
@@ -457,6 +570,13 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
                                         }}
                                     >
                                         Clear Selection
+                                    </Button>
+                                    <Button 
+                                        variant="secondary"
+                                        onClick={handlePublish}
+                                        disabled={!hasStagedChanges || isGenerating}
+                                    >
+                                        Publish
                                     </Button>
                                     <Button 
                                         onClick={openConfirm}
@@ -512,6 +632,9 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
                                     data={gridData}
                                     onSelectionChange={handleSelectionChange}
                                     onCellEdit={handleCellEdit}
+                                    onImageUpload={handleImageUpload}
+                                    onSingleFieldGenerate={handleSingleFieldGenerate}
+                                    onVisibleColumnsChange={handleVisibleColumnsChange}
                                 />
                             )}
                         </CardContent>
@@ -526,7 +649,7 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
                 mode={confirmStats.mode}
                 selectedCount={confirmStats.selectedCount}
                 fieldCount={confirmStats.fieldCount}
-                pricePerField={0.01}
+                pricePerField={billingStatus?.pricePerImageCents ? (billingStatus.pricePerImageCents / 100) : 0.01}
                 isProcessing={confirmProcessing}
             />
         </div>
