@@ -1,0 +1,15 @@
+# Development Dockerfile for hot-reloading Next.js
+# Uses a bind mount plus in-container node_modules volume so code changes reload without reinstalling dependencies on the host.
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+# Keep dev-friendly defaults and enable polling so file changes propagate from the host volume
+ENV NODE_ENV=development \
+    PATH=/app/node_modules/.bin:$PATH \
+    NEXT_TELEMETRY_DISABLED=1 \
+    WATCHPACK_POLLING=true
+
+# Default command installs deps into the container volume and starts Next.js in dev mode on 0.0.0.0 for Docker networking
+CMD ["sh", "-c", "npm install && npm run dev -- --hostname 0.0.0.0 --port 3000"]
+

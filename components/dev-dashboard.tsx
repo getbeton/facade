@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { MainHeader } from '@/components/main-header';
 import { DashboardSites } from '@/components/dashboard-sites';
@@ -21,6 +21,7 @@ export default function DashboardPage() {
     // State for Dev Mode
     const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
     const [gridData, setGridData] = useState<GridRow[]>([]);
+    const [initialGridData, setInitialGridData] = useState<GridRow[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
@@ -35,9 +36,44 @@ export default function DashboardPage() {
                     status: 'idle'
                 })) as GridRow[];
                 setGridData(rows);
+                setInitialGridData(rows);
             }
         }
     }, [isDevMode, selectedCollectionId]);
+
+    // Detect how many fields differ from the initial snapshot so Publish can enable on edits
+    const changedFieldCount = useMemo(() => {
+        if (!initialGridData.length || !gridData.length) return 0;
+        const initialById = initialGridData.reduce<Record<string, GridRow>>((acc, row) => {
+            acc[row.id] = row;
+            return acc;
+        }, {});
+        let total = 0;
+        gridData.forEach(row => {
+            const original = initialById[row.id];
+            if (!original) return;
+            const keys = new Set([...Object.keys(row.data), ...Object.keys(original.data)]);
+            keys.forEach(key => {
+                if (row.data[key] !== original.data[key]) {
+                    total += 1;
+                }
+            });
+        });
+        return total;
+    }, [gridData, initialGridData]);
+
+    // Centralize publish state and log for easier debugging in dev mode
+    const publishDisabled = useMemo(() => {
+        return !selectedCollectionId || (selectedRows.length === 0 && changedFieldCount === 0) || isGenerating;
+    }, [selectedCollectionId, selectedRows.length, changedFieldCount, isGenerating]);
+
+    useEffect(() => {
+        console.log('[dev-dashboard] publish state', {
+            selectedCount: selectedRows.length,
+            changedFieldCount,
+            publishDisabled,
+        });
+    }, [selectedRows.length, changedFieldCount, publishDisabled]);
 
     const handleGenerateMock = () => {
         setIsGenerating(true);
@@ -116,7 +152,11 @@ export default function DashboardPage() {
                             )}
                             Generate Selected ({selectedRows.length})
                         </Button>
-                        <Button size="sm" variant="outline" disabled>
+                        <Button 
+                            size="sm" 
+                            variant="outline" 
+                            disabled={publishDisabled}
+                        >
                             Publish
                         </Button>
                     </div>
@@ -141,6 +181,7 @@ export default function DashboardPage() {
                                 data={gridData}
                                 onSelectionChange={setSelectedRows}
                                 onCellEdit={(rowId, colId, val) => {
+                                    // Update staged data locally so we can detect changes for Publish enabling
                                     setGridData(curr => curr.map(row => 
                                         row.id === rowId 
                                             ? { ...row, data: { ...row.data, [colId]: val } }

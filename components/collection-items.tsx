@@ -125,6 +125,10 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         }
     }
 
+    // Track how many fields are currently staged so we can enable publish even after selection is cleared
+    const stagedFieldCount = useMemo(() => {
+        return Object.values(stagedChanges).reduce((count, fields) => count + Object.keys(fields || {}).length, 0)
+    }, [stagedChanges])
     const hasStagedChanges = useMemo(() => Object.keys(stagedChanges).length > 0, [stagedChanges])
 
     const handlePublish = async () => {
@@ -479,6 +483,18 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
     const progressPercent = generationStatus.total > 0 
         ? (generationStatus.progress / generationStatus.total) * 100 
         : 0
+    // Surface summary + button availability when rows are selected or staged edits exist
+    const selectedFieldCount = computeFieldCounts().fieldCount
+    const actionSummaryParts: string[] = []
+    if (selectedIds.size > 0) {
+        actionSummaryParts.push(`${selectedIds.size} items selected · ${selectedFieldCount} fields`)
+    }
+    if (stagedFieldCount > 0) {
+        actionSummaryParts.push(`${stagedFieldCount} staged field${stagedFieldCount === 1 ? '' : 's'}`)
+    }
+    const actionSummary = actionSummaryParts.join(' · ') || 'No selection yet'
+    const canPublish = hasStagedChanges || selectedIds.size > 0
+    const showSelectionActions = (selectedIds.size > 0 || hasStagedChanges) && !isGenerating
 
     return (
         <div className="space-y-6">
@@ -552,13 +568,11 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
                     )}
 
                     {/* Selection Actions */}
-                    {selectedIds.size > 0 && !isGenerating && (
+                    {showSelectionActions && (
                         <Card>
                             <CardContent className="flex items-center justify-between py-4">
                                 <div className="flex items-center gap-4 flex-wrap">
-                                    <span className="font-medium">
-                                        {selectedIds.size} items selected · {computeFieldCounts().fieldCount} fields
-                                    </span>
+                                    <span className="font-medium">{actionSummary}</span>
                                     {renderBillingBadge()}
                                 </div>
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -568,19 +582,20 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
                                             setSelectedIds(new Set())
                                             setBillingStatus(null)
                                         }}
+                                        disabled={selectedIds.size === 0}
                                     >
                                         Clear Selection
                                     </Button>
                                     <Button 
                                         variant="secondary"
                                         onClick={handlePublish}
-                                        disabled={!hasStagedChanges || isGenerating}
+                                        disabled={!canPublish || isGenerating}
                                     >
                                         Publish
                                     </Button>
                                     <Button 
                                         onClick={openConfirm}
-                                        disabled={checkingBilling}
+                                        disabled={selectedIds.size === 0 || checkingBilling}
                                     >
                                         {checkingBilling ? (
                                             <>

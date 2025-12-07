@@ -121,6 +121,20 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to view the app.
 
+### 6. Run with Docker (hot reload)
+
+Use the dev compose stack to run the app in Docker while keeping hot code reloading:
+
+```bash
+cp env.example .env.local                    # if you have not created it yet
+docker compose -f docker-compose.dev.yml up --build
+```
+
+- The container installs dependencies into an internal `node_modules` volume, so your host stays clean.
+- Code edits on the host are watched with polling (`WATCHPACK_POLLING`/`CHOKIDAR_USEPOLLING`) and reload automatically.
+- The app listens on `http://localhost:3000` inside Docker; update `.env.local` as needed for Supabase/Stripe keys before starting.
+- Stop with `docker compose -f docker-compose.dev.yml down` (add `-v` if you want to clear the `node_modules` volume).
+
 ## 🤝 Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.

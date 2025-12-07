@@ -6,3 +6,4 @@ ADD COLUMN IF NOT EXISTS free_items_used INTEGER DEFAULT 0;
 UPDATE public.collections SET free_items_used = 0 WHERE free_items_used IS NULL;
 
 
+

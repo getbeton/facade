@@ -1,0 +1,27 @@
+# Dev-only compose stack for hot code reload
+version: "3.9"
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: webflow-cms-image-generator:dev
+    container_name: webflow-cms-image-generator-dev
+    env_file:
+      - .env.local
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      CHOKIDAR_USEPOLLING: "true" # Ensure file change polling works across host/container boundaries
+    command: sh -c "npm install && npm run dev -- --hostname 0.0.0.0 --port 3000"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  node_modules: {}
+
