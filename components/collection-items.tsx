@@ -4,19 +4,12 @@ import { useEffect, useState, useCallback } from 'react'
 import { WebflowCollectionItem, BillingCheckResponse, GenerationStatus } from '@/lib/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Progress, ProgressTrack, ProgressIndicator } from '@/components/ui/progress'
 import { Loader2, ArrowLeft, Sparkles, CreditCard, Zap } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { ContentGrid, GridColumn, GridRow } from '@/components/grid/content-grid'
+import { GenerationDialog } from '@/components/generation-dialog'
 
 interface CollectionItemsProps {
     collectionId: string
@@ -60,6 +53,13 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         total: 0
     })
     const [generationMessage, setGenerationMessage] = useState('')
+    const [confirmOpen, setConfirmOpen] = useState(false)
+    const [confirmStats, setConfirmStats] = useState<{ selectedCount: number; fieldCount: number; mode: 'byok' | 'paid'; }>({
+        selectedCount: 0,
+        fieldCount: 0,
+        mode: 'paid',
+    })
+    const [confirmProcessing, setConfirmProcessing] = useState(false)
 
     // Fetch items on mount
     useEffect(() => {
@@ -85,28 +85,6 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         } finally {
             setLoading(false)
         }
-    }
-
-    // Toggle selection for a single item
-    const toggleSelection = (itemId: string) => {
-        const newSelected = new Set(selectedIds)
-        if (newSelected.has(itemId)) {
-            newSelected.delete(itemId)
-        } else {
-            newSelected.add(itemId)
-        }
-        setSelectedIds(newSelected)
-        setBillingStatus(null) // Reset billing status when selection changes
-    }
-
-    // Select all items
-    const selectAll = () => {
-        if (selectedIds.size === items.length) {
-            setSelectedIds(new Set())
-        } else {
-            setSelectedIds(new Set(items.map(item => item.id)))
-        }
-        setBillingStatus(null)
     }
 
     // Check billing status for selected items
@@ -138,24 +116,42 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         }
     }
 
-    // Handle generate button click
-    const handleGenerate = async () => {
-        if (selectedIds.size === 0) return
+    // Compute field count (text fields, excluding slug and images)
+    const computeFieldCounts = () => {
+        const textColumns = gridColumns.filter(col => col.type !== 'Image' && col.id.toLowerCase() !== 'slug')
+        const selectedCount = selectedIds.size
+        const fieldCount = selectedCount * textColumns.length
+        const mode: 'byok' | 'paid' = billingStatus?.reason === 'own_api_key' ? 'byok' : 'paid'
+        return { selectedCount, fieldCount, mode }
+    }
 
-        // First check billing status
+    const openConfirm = async () => {
+        if (selectedIds.size === 0) return
+        // ensure billing status fetched to know mode if possible
         if (!billingStatus) {
             await checkBillingStatus()
-            return
+        }
+        const stats = computeFieldCounts()
+        setConfirmStats(stats)
+        setConfirmOpen(true)
+    }
+
+    const handleConfirmGenerate = async () => {
+        setConfirmProcessing(true)
+        // First check billing status (again in case not fetched)
+        if (!billingStatus) {
+            await checkBillingStatus()
         }
 
-        // If payment required, redirect to checkout
-        if (billingStatus.requiresPayment) {
+        if (billingStatus?.requiresPayment) {
             await startCheckout()
+            setConfirmProcessing(false)
             return
         }
 
-        // Otherwise, start generation (free tier or own API key)
         await startGeneration()
+        setConfirmProcessing(false)
+        setConfirmOpen(false)
     }
 
     // Start Stripe checkout for paid items
@@ -264,7 +260,7 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         }
     }
 
-    // Render billing status badge
+    // Render billing badge
     const renderBillingBadge = () => {
         if (!billingStatus) return null
 
@@ -297,6 +293,45 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
         }
 
         return null
+    }
+
+    // Transform items for grid
+    const gridData: GridRow[] = items.map((item, index) => ({
+        id: item.id,
+        displayId: String(index + 1), // Simple auto-increment for display
+        data: item.fieldData,
+        status: 'idle', // You might want to track item-specific status if needed
+    }));
+
+    // Generate columns from item data keys (simple inference)
+    // Ideally this comes from schema or a defined config
+    const inferColumns = (): GridColumn[] => {
+        if (items.length === 0) return [];
+        const sample = items[0].fieldData;
+        return Object.keys(sample).map(key => ({
+            id: key,
+            label: key.charAt(0).toUpperCase() + key.slice(1).replace(/-/g, ' '),
+            type: key.toLowerCase().includes('image') ? 'Image' : 'PlainText' // Simple heuristic
+        }));
+    };
+
+    const gridColumns = inferColumns();
+
+    const handleSelectionChange = (ids: string[]) => {
+        setSelectedIds(new Set(ids));
+        setBillingStatus(null);
+    }
+
+    const handleCellEdit = (rowId: string, columnId: string, value: string) => {
+        // Don't allow editing slug
+        if (columnId.toLowerCase() === 'slug') return
+        setItems((prev) =>
+            prev.map((item) =>
+                item.id === rowId
+                    ? { ...item, fieldData: { ...item.fieldData, [columnId]: value } }
+                    : item
+            )
+        )
     }
 
     // Loading state
@@ -379,164 +414,121 @@ export function CollectionItems({ collectionId }: CollectionItemsProps) {
             ) : (
                 <div className="space-y-6">
                     {/* Generation Progress */}
-            {(isGenerating || generationStatus.status === 'success' || generationStatus.status === 'error') && (
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">
-                            {isGenerating ? 'Generating Images...' : 
-                             generationStatus.status === 'success' ? 'Generation Complete' : 'Generation Error'}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <Progress value={progressPercent}>
-                            <ProgressTrack>
-                                <ProgressIndicator />
-                            </ProgressTrack>
-                        </Progress>
-                        <p className="text-sm text-muted-foreground">
-                            {generationMessage || `${generationStatus.progress} / ${generationStatus.total} items`}
-                        </p>
-                        {generationStatus.currentItem && isGenerating && (
-                            <p className="text-sm">
-                                Current: <span className="font-medium">{generationStatus.currentItem}</span>
-                            </p>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* Selection Actions */}
-            {selectedIds.size > 0 && !isGenerating && (
-                <Card>
-                    <CardContent className="flex items-center justify-between py-4">
-                        <div className="flex items-center gap-4">
-                            <span className="font-medium">{selectedIds.size} items selected</span>
-                            {renderBillingBadge()}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Button 
-                                variant="outline" 
-                                onClick={() => {
-                                    setSelectedIds(new Set())
-                                    setBillingStatus(null)
-                                }}
-                            >
-                                Clear Selection
-                            </Button>
-                            <Button 
-                                onClick={handleGenerate}
-                                disabled={checkingBilling}
-                            >
-                                {checkingBilling ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Checking...
-                                    </>
-                                ) : billingStatus?.requiresPayment ? (
-                                    <>
-                                        <CreditCard className="mr-2 h-4 w-4" />
-                                        Pay & Generate
-                                    </>
-                                ) : billingStatus ? (
-                                    <>
-                                        <Sparkles className="mr-2 h-4 w-4" />
-                                        Generate Images
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles className="mr-2 h-4 w-4" />
-                                        Check & Generate
-                                    </>
+                    {(isGenerating || generationStatus.status === 'success' || generationStatus.status === 'error') && (
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-lg">
+                                    {isGenerating ? 'Generating Images...' : 
+                                     generationStatus.status === 'success' ? 'Generation Complete' : 'Generation Error'}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <Progress value={progressPercent}>
+                                    <ProgressTrack>
+                                        <ProgressIndicator />
+                                    </ProgressTrack>
+                                </Progress>
+                                <p className="text-sm text-muted-foreground">
+                                    {generationMessage || `${generationStatus.progress} / ${generationStatus.total} items`}
+                                </p>
+                                {generationStatus.currentItem && isGenerating && (
+                                    <p className="text-sm">
+                                        Current: <span className="font-medium">{generationStatus.currentItem}</span>
+                                    </p>
                                 )}
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Selection Actions */}
+                    {selectedIds.size > 0 && !isGenerating && (
+                        <Card>
+                            <CardContent className="flex items-center justify-between py-4">
+                                <div className="flex items-center gap-4">
+                                    <span className="font-medium">{selectedIds.size} items selected</span>
+                                    {renderBillingBadge()}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button 
+                                        variant="outline" 
+                                        onClick={() => {
+                                            setSelectedIds(new Set())
+                                            setBillingStatus(null)
+                                        }}
+                                    >
+                                        Clear Selection
+                                    </Button>
+                                    <Button 
+                                        onClick={openConfirm}
+                                        disabled={checkingBilling}
+                                    >
+                                        {checkingBilling ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Checking...
+                                            </>
+                                        ) : billingStatus?.requiresPayment ? (
+                                            <>
+                                                <CreditCard className="mr-2 h-4 w-4" />
+                                                Pay & Generate
+                                            </>
+                                        ) : billingStatus ? (
+                                            <>
+                                                <Sparkles className="mr-2 h-4 w-4" />
+                                                Generate Images
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles className="mr-2 h-4 w-4" />
+                                                Check & Generate
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Items Grid */}
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle>Items ({items.length})</CardTitle>
+                                    <CardDescription>
+                                        Select items to generate images
+                                    </CardDescription>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {items.length === 0 ? (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    No items found in this collection
+                                </div>
+                            ) : (
+                                <ContentGrid 
+                                    columns={gridColumns}
+                                    data={gridData}
+                                    onSelectionChange={handleSelectionChange}
+                                    onCellEdit={handleCellEdit}
+                                />
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
             )}
 
-            {/* Items Table */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle>Items ({items.length})</CardTitle>
-                            <CardDescription>
-                                Select items to generate images
-                            </CardDescription>
-                        </div>
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={selectAll}
-                            disabled={isGenerating}
-                        >
-                            {selectedIds.size === items.length ? 'Deselect All' : 'Select All'}
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    {items.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                            No items found in this collection
-                        </div>
-                    ) : (
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-12">
-                                            <Checkbox
-                                                checked={selectedIds.size === items.length && items.length > 0}
-                                                indeterminate={selectedIds.size > 0 && selectedIds.size < items.length}
-                                                onCheckedChange={() => selectAll()}
-                                                disabled={isGenerating}
-                                            />
-                                        </TableHead>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Last Updated</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {items.map((item) => (
-                                        <TableRow 
-                                            key={item.id}
-                                            className={selectedIds.has(item.id) ? 'bg-muted/50' : ''}
-                                        >
-                                            <TableCell>
-                                                <Checkbox
-                                                    checked={selectedIds.has(item.id)}
-                                                    onCheckedChange={() => toggleSelection(item.id)}
-                                                    disabled={isGenerating}
-                                                />
-                                            </TableCell>
-                                            <TableCell className="font-medium">
-                                                {item.fieldData.name || item.fieldData['tool-name'] || 'Untitled'}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex gap-2">
-                                                    {item.isDraft && <Badge variant="secondary">Draft</Badge>}
-                                                    {item.isArchived && <Badge variant="outline">Archived</Badge>}
-                                                    {!item.isDraft && !item.isArchived && (
-                                                        <Badge className="bg-green-500">Published</Badge>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                {item.lastUpdated 
-                                                    ? new Date(item.lastUpdated).toLocaleDateString() 
-                                                    : '-'}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-            </div>
-            )}
+            <GenerationDialog
+                open={confirmOpen}
+                onCancel={() => setConfirmOpen(false)}
+                onConfirm={handleConfirmGenerate}
+                mode={confirmStats.mode}
+                selectedCount={confirmStats.selectedCount}
+                fieldCount={confirmStats.fieldCount}
+                pricePerField={0.01}
+                isProcessing={confirmProcessing}
+            />
         </div>
     )
 }

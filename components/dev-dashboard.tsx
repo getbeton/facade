@@ -78,7 +78,7 @@ export default function DashboardPage() {
                 <div className="border-b bg-muted/40 px-6 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-muted-foreground">Context:</span>
+                            <span className="text-sm font-medium text-muted-foreground">Collections:</span>
                             <Select 
                                 value={selectedCollectionId || ''} 
                                 onValueChange={setSelectedCollectionId}
