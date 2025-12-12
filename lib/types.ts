@@ -73,6 +73,9 @@ export interface Site {
     user_id: string;
     name: string;
     short_name: string;
+    primary_domain?: string | null;
+    webflow_domain?: string | null;
+    custom_domains?: Array<{ url: string }> | null;
     preview_url: string | null;
     favicon_url: string | null;
     last_synced_at: string;
@@ -86,6 +89,8 @@ export interface Collection {
     site_id: string;
     webflow_collection_id: string;
     display_name: string;
+    collection_slug?: string | null;
+    url_base?: string | null;
     created_at: string;
     updated_at: string;
     // Join fields (optional)
@@ -142,6 +147,99 @@ export interface Payment {
     generation_logs_count: number;
     item_ids: string[] | null; // JSONB array of Webflow item IDs
     generation_started: boolean;
+}
+
+/**
+ * Publication log entry - tracks a publish job
+ */
+export interface Publication {
+    id: string;
+    user_id: string;
+    collection_id: string | null;
+    site_id: string | null;
+    webflow_collection_id: string;
+    total_items: number;
+    total_fields: number;
+    items_succeeded: number;
+    items_failed: number;
+    fields_succeeded: number;
+    fields_failed: number;
+    status: 'processing' | 'completed' | 'partial' | 'failed';
+    started_at: string;
+    completed_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+/**
+ * Per-item publication detail
+ */
+export interface PublicationItem {
+    id: string;
+    publication_id: string;
+    collection_id: string | null;
+    webflow_item_id: string;
+    slug?: string | null;
+    published_url?: string | null;
+    fields_total: number;
+    fields_succeeded: number;
+    fields_failed: number;
+    status: 'processing' | 'succeeded' | 'failed' | 'skipped';
+    error_message?: string | null;
+    completed_at?: string | null;
+    created_at: string;
+}
+
+/**
+ * Publish stream events returned by /api/items/publish
+ */
+export type PublishStreamEvent =
+    | {
+        type: 'started';
+        publicationId: string;
+        totalItems: number;
+        totalFields: number;
+        message?: string;
+    }
+    | {
+        type: 'item';
+        publicationId: string;
+        itemId: string;
+        slug?: string | null;
+        url?: string | null;
+        fieldsSucceeded: number;
+        fieldsFailed: number;
+        itemsCompleted: number;
+        itemsFailed: number;
+        appliedFields?: string[];
+        message?: string;
+        status: 'succeeded' | 'failed';
+        error?: string;
+    }
+    | {
+        type: 'completed';
+        status: 'completed' | 'partial' | 'failed';
+        publicationId: string;
+        totalItems: number;
+        totalFields: number;
+        itemsSucceeded: number;
+        itemsFailed: number;
+        fieldsSucceeded: number;
+        fieldsFailed: number;
+        links: PublishLink[];
+        message?: string;
+    }
+    | {
+        type: 'error';
+        message: string;
+    };
+
+export interface PublishLink {
+    itemId: string;
+    slug?: string | null;
+    url?: string | null;
+    status: 'succeeded' | 'failed';
+    error?: string | null;
 }
 
 /**

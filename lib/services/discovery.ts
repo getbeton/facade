@@ -24,6 +24,27 @@ export class DiscoveryService {
     }
 
     /**
+     * Pick the preferred domain for a site (custom first, fallback to webflow subdomain)
+     */
+    private deriveDomains(site: { shortName?: string; customDomains?: Array<{ url: string }> | null }) {
+        const webflowDomain = site.shortName
+            ? (site.shortName.includes('.') ? site.shortName : `${site.shortName}.webflow.io`)
+            : null;
+        const firstCustom = site.customDomains?.[0]?.url;
+        const normalizedCustom = firstCustom
+            ? firstCustom.replace(/^https?:\/\//, '').replace(/\/$/, '')
+            : null;
+
+        const domains = {
+            primary: normalizedCustom || webflowDomain || null,
+            webflow: webflowDomain || null,
+            customDomains: site.customDomains || null,
+        };
+        console.log('[discovery] deriveDomains', { shortName: site.shortName, primary: domains.primary, webflow: domains.webflow });
+        return domains;
+    }
+
+    /**
      * Step 1: Validate keys and create/update integration record
      */
     async connectIntegration(userId: string, webflowKey: string, openaiKey: string) {
@@ -80,16 +101,22 @@ export class DiscoveryService {
         const webflowSites = await getAllSites(webflowKey);
 
         // 3. Upsert to DB
-        const sitesToUpsert = webflowSites.map(site => ({
-            id: site.id,
-            user_id: integration.user_id,
-            integration_id: integrationId,
-            name: site.displayName,
-            short_name: site.shortName,
-            preview_url: site.previewUrl,
-            favicon_url: site.faviconUrl,
-            last_synced_at: new Date().toISOString()
-        }));
+        const sitesToUpsert = webflowSites.map(site => {
+            const domains = this.deriveDomains(site);
+            return {
+                id: site.id,
+                user_id: integration.user_id,
+                integration_id: integrationId,
+                name: site.displayName,
+                short_name: site.shortName,
+                primary_domain: domains.primary,
+                webflow_domain: domains.webflow,
+                custom_domains: domains.customDomains,
+                preview_url: site.previewUrl,
+                favicon_url: site.faviconUrl,
+                last_synced_at: new Date().toISOString()
+            };
+        });
 
         if (sitesToUpsert.length > 0) {
             const { error } = await this.supabase
@@ -119,15 +146,29 @@ export class DiscoveryService {
         // 2. Fetch Collections
         const webflowCollections = await getCollections(webflowKey, siteId);
 
+        // 2b. Fetch site domain context to build item URL bases
+        const { data: siteRecord } = await this.supabase
+            .from('sites')
+            .select('short_name, primary_domain, webflow_domain')
+            .eq('id', siteId)
+            .single();
+        const preferredDomain = siteRecord?.primary_domain || siteRecord?.webflow_domain || null;
+
         // 3. Sync Collections
         // Note: We no longer store API keys on the collection
-        const collectionsToUpsert = webflowCollections.map(col => ({
-            user_id: integration.user_id,
-            site_id: siteId,
-            webflow_collection_id: col.id,
-            display_name: col.displayName,
-            updated_at: new Date().toISOString()
-        }));
+        const collectionsToUpsert = webflowCollections.map(col => {
+            const urlBase = preferredDomain ? `https://${preferredDomain.replace(/\/$/, '')}/${col.slug}` : null;
+            console.log('[discovery] collection url base', { siteId, collectionId: col.id, urlBase });
+            return {
+                user_id: integration.user_id,
+                site_id: siteId,
+                webflow_collection_id: col.id,
+                display_name: col.displayName,
+                collection_slug: col.slug,
+                url_base: urlBase,
+                updated_at: new Date().toISOString()
+            };
+        });
 
         // We need to upsert based on webflow_collection_id, but our PK is UUID.
         // We can look them up first or use a unique constraint on webflow_collection_id.

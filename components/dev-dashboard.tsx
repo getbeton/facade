@@ -23,6 +23,7 @@ export default function DashboardPage() {
     const [gridData, setGridData] = useState<GridRow[]>([]);
     const [initialGridData, setInitialGridData] = useState<GridRow[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isPublishing, setIsPublishing] = useState(false);
     const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
     useEffect(() => {
@@ -64,8 +65,8 @@ export default function DashboardPage() {
 
     // Centralize publish state and log for easier debugging in dev mode
     const publishDisabled = useMemo(() => {
-        return !selectedCollectionId || (selectedRows.length === 0 && changedFieldCount === 0) || isGenerating;
-    }, [selectedCollectionId, selectedRows.length, changedFieldCount, isGenerating]);
+        return !selectedCollectionId || (selectedRows.length === 0 && changedFieldCount === 0) || isGenerating || isPublishing;
+    }, [selectedCollectionId, selectedRows.length, changedFieldCount, isGenerating, isPublishing]);
 
     useEffect(() => {
         console.log('[dev-dashboard] publish state', {
@@ -95,6 +96,24 @@ export default function DashboardPage() {
             }));
             setIsGenerating(false);
         }, 2000);
+    };
+
+    // Mock publish flow for dev mode: "saves" staged edits and clears the changed counter.
+    const handlePublishMock = () => {
+        if (publishDisabled) return;
+        setIsPublishing(true);
+        setTimeout(() => {
+            // Treat current grid as the new baseline to clear change tracking
+            setInitialGridData(current => gridData.map(row => ({ ...row, data: { ...row.data } })));
+            // Mark selected rows as published/success
+            setGridData(current => current.map(row => {
+                if (selectedRows.includes(row.id)) {
+                    return { ...row, status: 'success' };
+                }
+                return row;
+            }));
+            setIsPublishing(false);
+        }, 800);
     };
 
     if (isDevMode) {
@@ -156,8 +175,16 @@ export default function DashboardPage() {
                             size="sm" 
                             variant="outline" 
                             disabled={publishDisabled}
+                            onClick={handlePublishMock}
                         >
-                            Publish
+                            {isPublishing ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                    Publishing...
+                                </>
+                            ) : (
+                                'Publish'
+                            )}
                         </Button>
                     </div>
                 </div>

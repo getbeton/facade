@@ -63,6 +63,7 @@ interface ContentGridProps {
     onImageUpload?: (rowId: string, columnId: string, file: File) => void;
     onSingleFieldGenerate?: (rowId: string, columnId: string) => void;
     onVisibleColumnsChange?: (columnIds: string[]) => void;
+    slugBaseUrl?: string | null;
 }
 
 // --- Icons ---
@@ -152,7 +153,7 @@ const ImageCell = ({ value, rowId, columnId, status, onImageUpload }: ImageCellP
 
 // --- Components ---
 
-export function ContentGrid({ columns, data, onSelectionChange, onCellEdit, onImageUpload, onSingleFieldGenerate, onVisibleColumnsChange }: ContentGridProps) {
+export function ContentGrid({ columns, data, onSelectionChange, onCellEdit, onImageUpload, onSingleFieldGenerate, onVisibleColumnsChange, slugBaseUrl }: ContentGridProps) {
     const [rowSelection, setRowSelection] = useState({})
     const [sorting, setSorting] = useState<SortingState>([])
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -268,6 +269,9 @@ export function ContentGrid({ columns, data, onSelectionChange, onCellEdit, onIm
 
                 // Check for slug column
                 const isSlug = col.id.toLowerCase() === 'slug';
+                const slugHref = isSlug && slugBaseUrl && value
+                    ? `${slugBaseUrl.replace(/\/$/, '')}/${String(value).replace(/^\//, '')}`
+                    : null;
 
                 return (
                     <EditableCell 
@@ -275,6 +279,7 @@ export function ContentGrid({ columns, data, onSelectionChange, onCellEdit, onIm
                         rowId={rowId}
                         columnId={col.id}
                         isReadOnly={isSlug} // Disable editing for slugs
+                        linkHref={slugHref}
                         onSave={(rId, cId, val) => onCellEdit?.(rId, cId, val)}
                         onGenerate={!isSlug ? (rId, cId) => onSingleFieldGenerate?.(rId, cId) : undefined}
                     />

@@ -31,8 +31,16 @@ export async function GET(request: NextRequest) {
         const { data: collection, error: collectionError } = await supabase
             .from('collections')
             .select(`
-                webflow_collection_id, 
+                webflow_collection_id,
+                site_id,
+                url_base,
+                collection_slug,
                 site:sites (
+                    id,
+                    short_name,
+                    preview_url,
+                    primary_domain,
+                    webflow_domain,
                     integration:integrations (
                         encrypted_webflow_key
                     )
@@ -57,11 +65,28 @@ export async function GET(request: NextRequest) {
         // Decrypt the API key
         const webflowApiKey = decrypt(integrationObj.encrypted_webflow_key);
         const webflowCollectionId = collection.webflow_collection_id;
+        const siteId = collection.site_id;
+        const siteInfo = siteObj
+            ? {
+                id: siteObj.id,
+                shortName: siteObj.short_name,
+                previewUrl: siteObj.preview_url || null,
+                primaryDomain: siteObj.primary_domain || null,
+                webflowDomain: siteObj.webflow_domain || null,
+            }
+            : null;
 
         // Fetch items using the decrypted API key and actual Webflow Collection ID
         const items = await getCollectionItems(webflowApiKey, webflowCollectionId);
 
-        return NextResponse.json({ items });
+        const collectionPayload = {
+            urlBase: (collection as any)?.url_base || null,
+            collectionSlug: (collection as any)?.collection_slug || null,
+            webflowCollectionId,
+            siteId: siteId ?? null,
+        };
+
+        return NextResponse.json({ items, site: siteInfo, collection: collectionPayload });
     } catch (error) {
         console.error('Error fetching items:', error);
         return NextResponse.json(

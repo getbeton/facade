@@ -7,3 +7,5 @@ UPDATE public.collections SET free_items_used = 0 WHERE free_items_used IS NULL;
 
 
 
+
+

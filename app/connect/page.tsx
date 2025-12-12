@@ -77,12 +77,14 @@ export default function ConnectPage() {
         setGlobalError(null);
 
         try {
+            const openaiKeyToSend = isManagedMode ? undefined : openaiKey;
             const res = await fetch('/api/connect', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     webflowApiKey: webflowKey, 
-                    openaiApiKey: isManagedMode ? undefined : openaiKey
+                    openaiApiKey: openaiKeyToSend,
+                    managedOpenai: isManagedMode,
                 }),
             });
 
@@ -94,7 +96,8 @@ export default function ConnectPage() {
 
             router.push('/dashboard');
         } catch (err: any) {
-            setGlobalError(err.message);
+            const message = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unexpected error';
+            setGlobalError(String(message));
         } finally {
             setIsConnecting(false);
         }
@@ -106,7 +109,7 @@ export default function ConnectPage() {
 
     const isWebflowValid = webflowStatus === 'valid';
     const isOpenAIValid = isManagedMode || openaiStatus === 'valid';
-    const canProceed = isWebflowValid && isOpenAIValid;
+    const canProceed = isWebflowValid && isOpenAIValid && !!webflowKey && (isManagedMode || !!openaiKey);
 
     return (
         <div className="min-h-screen bg-muted/40 flex flex-col">

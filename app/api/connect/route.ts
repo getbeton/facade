@@ -12,16 +12,22 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { webflowApiKey, openaiApiKey } = body;
+        const { webflowApiKey, openaiApiKey, managedOpenai = false } = body;
 
-        if (!webflowApiKey || !openaiApiKey) {
-            return NextResponse.json({ error: 'Missing API keys' }, { status: 400 });
+        if (!webflowApiKey) {
+            return NextResponse.json({ error: 'Missing Webflow API key' }, { status: 400 });
+        }
+
+        // When managed mode is enabled we do not require a user OpenAI key; use a placeholder.
+        const openaiKeyToUse = managedOpenai ? 'managed' : openaiApiKey;
+        if (!openaiKeyToUse) {
+            return NextResponse.json({ error: 'Missing OpenAI API key' }, { status: 400 });
         }
 
         const discovery = new DiscoveryService(supabase);
 
         // 1. Connect Integration
-        const integration = await discovery.connectIntegration(user.id, webflowApiKey, openaiApiKey);
+        const integration = await discovery.connectIntegration(user.id, webflowApiKey, openaiKeyToUse);
 
         // 2. Initial Scan (Fetch Sites)
         const sites = await discovery.scanAccount(integration.id);

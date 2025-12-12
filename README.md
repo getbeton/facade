@@ -25,6 +25,7 @@ Check out our other tools and resources:
 - **Inline actions**: click/drag-drop on image cells to stage uploads; use the wand button to generate a single field immediately (still staged).
 - **SEO/meta ready**: all CMS fields, including SEO/open graph fields returned by Webflow, are surfaced for editing and generation.
 - Generations run **field-by-field** with full row context and field names to keep prompts accurate and avoid failing entire batches.
+- Publishing from this tool updates CMS items only; republishing the live site must be confirmed separately inside Webflow.
 
 ## 🛠 Prerequisites
 
@@ -82,10 +83,12 @@ This project uses Supabase (PostgreSQL). The schema is managed via migrations in
 
 - **`sites`**
   - Stores connected Webflow sites.
+  - Tracks preferred domains (`primary_domain` for the first custom domain if present, `webflow_domain` fallback, `custom_domains` JSONB).
   - Linked to `integrations`.
 
 - **`collections`**
   - Stores Webflow collections synced from sites.
+  - Includes `collection_slug` and `url_base` to build per-item URLs from slugs.
   - Linked to `sites`.
 
 - **`profiles`**
@@ -103,6 +106,14 @@ This project uses Supabase (PostgreSQL). The schema is managed via migrations in
 
 - **`seo_suggestions`**
   - Stores generated SEO suggestions (title/description) for review.
+
+- **`publications`**
+  - One row per publish action; references `profiles`, `collections`, and `sites`.
+  - Stores totals for items/fields, success/failure counts, status, and timestamps.
+
+- **`publication_items`**
+  - Per-CMS-item results for each publication.
+  - References `publications` (and indirectly the user) plus `collections`; stores slug/url, field totals, status, and errors.
 
 ### 4. Google OAuth Setup
 
