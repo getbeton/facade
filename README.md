@@ -1,13 +1,17 @@
 # Webflow CMS Image Generator
 
+> [!WARNING]
+> This repository is archived and read-only. The last Beton code is in [getbeton/inspector](https://github.com/getbeton/inspector). Beton is not in active development.
+> The team now builds [Sell to State](https://www.selltostate.com/?utm_source=github&utm_medium=referral&utm_campaign=beton-repos&utm_content=facade): government tenders and contract awards from official sources in 70+ countries.
+
 A powerful Next.js application for generating and managing AI images for Webflow CMS collections. This tool integrates with OpenAI (DALL-E) and Webflow to automate the process of creating and updating OG images and other assets for your CMS items.
 
 ## 🔗 Related Projects & Resources
 
 Check out our other tools and resources:
-- [**Beton App**](https://getbeton.ai/app) - The main application.
-- [**Beton Facade**](https://getbeton.ai/facade) - Manage your AI facades.
-- [**Beton Blog**](https://getbeton.ai/blog) - Tips, tricks, and updates.
+- **Beton App** - The main application.
+- **Beton Facade** - Manage your AI facades.
+- [**Beton Blog**](https://github.com/getbeton/beton-main-site/tree/master/src/data/blog) - Tips, tricks, and updates.
 
 ## ✨ Features
 
